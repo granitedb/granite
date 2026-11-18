@@ -143,7 +143,7 @@ bench/                workload definitions and stored results
 tools/                repository scripts
 ```
 
-Package names carry a `granite-` prefix (`crates/vsr` is the package `granite-vsr`). Dependencies in the table are the allowed direction; the workspace manifest is the place where they are declared.
+Package names carry a `granite-` prefix (`crates/vsr` is the package `granite-vsr`). Dependencies in the table are the allowed direction; the workspace manifest is the place where they are declared. A crate may also depend directly on anything below its listed dependencies; any other dependency between the packages in this table, the gateway included, is rejected by `just check` (`tools/crate_graph.py`, which mirrors this table).
 
 | Path | Responsibility | Depends on |
 |---|---|---|
@@ -169,7 +169,7 @@ Package names carry a `granite-` prefix (`crates/vsr` is the package `granite-vs
 
 The server, its tools and the benchmark harness ship as one binary so that a tool always matches the server version. The gateway is kept out of the workspace so that its large dependency tree never enters the database build.
 
-External dependencies are kept minimal and audited: `io-uring`, `zerocopy` or `bytemuck`, `rustls`, vendored `lz4`/`zstd`, a checksum crate. Adding a dependency to the workspace needs a stated reason in the change that adds it.
+External dependencies are kept minimal and audited: `io-uring`, `zerocopy` or `bytemuck`, `rustls`, vendored `lz4`/`zstd`, a checksum crate. Adding a dependency to the workspace needs a stated reason in the change that adds it. The approval rule and the audit step are in `CONTRIBUTING.md`.
 
 ## 6. Benchmarks
 

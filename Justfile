@@ -7,8 +7,12 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 default:
     @just --list --unsorted
 
-# Everything CI checks: formatting, lints, tests, the API docs, and the gateway build.
-check: fmt-check lint test doc gateway roadmap-plan
+# Everything CI checks: crate directions, formatting, lints, tests, the API docs, and the gateway build.
+check: crate-graph fmt-check lint test doc gateway roadmap-plan
+
+# Fail if a crate depends on another against the allowed direction (docs/06 section 5).
+crate-graph:
+    python3 tools/crate_graph.py
 
 # Build every crate in the workspace.
 build:

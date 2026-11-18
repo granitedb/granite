@@ -65,7 +65,7 @@ Holds: cluster id, group id, replica index, format version, VSR state (view, log
 - Block cache: set-associative, fixed size, per shard, keyed by address, validated by checksum.
 - Grid repair: on checksum failure the shard requests the block by (address, checksum) from peers. This works because storage is byte-identical across replicas of a group.
 
-Checksums: 128-bit. Candidates are AEGIS-128L (hardware AES, what TigerBeetle uses) and XXH3-128. Decide by benchmark; the choice is part of the on-disk format.
+Checksums: 128-bit XXH3-128 (default secret, seed 0), computed only through `granite_base::checksum::checksum`. AEGIS-128L, what TigerBeetle uses, was the other candidate; the comparison and the reasons are in [decisions/0002](decisions/0002-checksum.md), which stays proposed until the x86-64 report confirms it. The choice is part of the on-disk and wire formats.
 
 ## 3. LSM forest
 

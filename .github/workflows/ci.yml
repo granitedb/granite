@@ -12,6 +12,11 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+defaults:
+  run:
+    # Adds -o pipefail to the default -e.
+    shell: bash
+
 jobs:
   check:
     strategy:
@@ -19,12 +24,23 @@ jobs:
       matrix:
         os: [ubuntu-24.04, macos-15]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # rustup reads rust-toolchain.toml and installs the pinned compiler.
       - name: Install the pinned toolchain
         run: rustup show active-toolchain || rustup toolchain install
+
+      # Pull requests restore the cache that main saves; they never write one.
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: |
+            .
+            gateway
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install just (Linux)
         if: runner.os == 'Linux'
@@ -34,5 +50,69 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install just
 
-      - name: Check
-        run: just check
+      # The steps below are `just check`, one recipe per step so a failure names its cause.
+      - name: Steps match just check
+        run: |
+          test "$(just --show check | grep '^check:')" = "check: crate-graph fmt-check lint test doc gateway roadmap-plan" \
+            || { echo "::error::The check recipe changed; update the steps in .github/workflows/ci.yml"; exit 1; }
+
+      - name: Crate graph
+        run: just crate-graph
+
+      - name: Format
+        run: just fmt-check
+
+      - name: Lint
+        run: just lint
+
+      - name: Test
+        run: just test
+
+      - name: API docs
+        run: just doc
+
+      - name: Gateway
+        run: just gateway
+
+      - name: Roadmap plan
+        run: just roadmap-plan
+
+      # `just sim` runs the fixed seed list in crates/sim/ci-seeds.txt (T0.4.5).
+      # shortcut: skipped while the recipe does not exist, drop the guard when T0.4.5 lands.
+      - name: Fixed simulator seeds
+        run: |
+          if just --show sim >/dev/null 2>&1; then
+            just sim
+          else
+            echo "::warning::just sim does not exist yet (T0.4.5); the fixed seeds did not run"
+          fi
+
+  # Evidence for docs/decisions/0001-io-uring-on-hosted-runners.md.
+  io-uring:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Kernel and io_uring sysctl
+        run: |
+          uname -a
+          echo "kernel.io_uring_disabled = $(cat /proc/sys/kernel/io_uring_disabled 2>/dev/null || echo 'not present')"
+
+      - name: Install fio
+        run: sudo apt-get update && sudo apt-get install -y fio
+
+      # fio's io_uring engine creates a ring with io_uring_setup and fails if that is refused.
+      - name: One direct read through io_uring on the runner
+        run: |
+          fio --name=probe --ioengine=io_uring --rw=read --bs=4k --size=4k --direct=1 \
+            --filename="$RUNNER_TEMP/probe" | tee "$RUNNER_TEMP/fio.txt"
+          grep -q 'issued rwts: total=1,0,' "$RUNNER_TEMP/fio.txt"
+
+      # Docker's default seccomp profile may refuse io_uring. Recorded, not required:
+      # CI never runs Linux-only jobs in a container.
+      - name: The same read inside a container
+        continue-on-error: true
+        run: |
+          docker run --rm -v "$RUNNER_TEMP:/w" -e DEBIAN_FRONTEND=noninteractive \
+            ubuntu:24.04@sha256:73b999393d07f2bf65a40373778a44dc9a6d54ad7718d29247d8ff9413c4d6a8 \
+            bash -c 'apt-get update -qq && apt-get install -y -qq --no-install-recommends fio >/dev/null &&
+              fio --name=probe --ioengine=io_uring --rw=read --bs=4k --size=4k --direct=1 --filename=/w/probe-container'

@@ -1,0 +1,43 @@
+name: Nightly
+
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  seeds:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    env:
+      SEED_COUNT: 10000
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install the pinned toolchain
+        run: rustup show active-toolchain || rustup toolchain install
+
+      - name: Install just
+        run: sudo apt-get update && sudo apt-get install -y just
+
+      # A new range every night, above the fixed list. The range and commit are the reproduction.
+      # Keyed on `just sim` (required by T0.4.5), so a missing sim-range fails once the runner exists.
+      # shortcut: skipped while the runner does not exist, drop the guard when T0.4.5 lands.
+      - name: Further simulator seeds
+        run: |
+          first=$(( GITHUB_RUN_NUMBER * SEED_COUNT ))
+          echo "Seeds $first to $(( first + SEED_COUNT - 1 )) at commit $GITHUB_SHA"
+          if just --show sim >/dev/null 2>&1; then
+            just sim-range "$first" "$SEED_COUNT"
+          else
+            echo "::warning::just sim does not exist yet (T0.4.5); no seeds ran"
+          fi

@@ -23,7 +23,13 @@ fn main() -> ExitCode {
         return ExitCode::from(2);
     };
 
+    let has_extra_arguments = args.next().is_some();
+
     match command.as_str() {
+        "version" | "--version" | "-V" | "help" | "--help" | "-h" if has_extra_arguments => {
+            eprintln!("granite {command}: unexpected arguments");
+            ExitCode::from(2)
+        }
         "version" | "--version" | "-V" => {
             println!("granite {}", env!("CARGO_PKG_VERSION"));
             ExitCode::SUCCESS

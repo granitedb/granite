@@ -16,7 +16,6 @@ dependencies = [
  "granite-query",
  "granite-schema",
  "granite-shard",
- "granite-sim",
  "granite-storage",
  "granite-txn",
  "granite-types",

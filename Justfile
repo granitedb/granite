@@ -7,8 +7,8 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 default:
     @just --list --unsorted
 
-# Everything CI checks: formatting, lints, tests, and the gateway build.
-check: fmt-check lint test gateway
+# Everything CI checks: formatting, lints, tests, the API docs, and the gateway build.
+check: fmt-check lint test doc gateway
 
 # Build every crate in the workspace.
 build:

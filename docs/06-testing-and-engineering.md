@@ -105,7 +105,7 @@ The reference model is a small, obviously correct in-memory implementation of th
 - **Client conformance suite:** one set of scenarios that the Rust, Go and Python clients must all pass, including retries, failover and stale maps.
 - **Gateway:** SQL results compared against the reference model over a query corpus; fault tests for mid-query view changes.
 - **Real-hardware tests:** crash consistency with power-fail injection (dm-flakey or similar), long soak tests, Jepsen-style tests on real machines before any release.
-- **Assertions:** preconditions, postconditions and invariants are asserted in production code and left enabled in release builds. A failed assertion crashes the shard; replication absorbs it.
+- **Assertions:** preconditions, postconditions and invariants are asserted in production code and left enabled in release builds. A failed assertion aborts the process, so it stops every shard on that node; replication absorbs it, as it absorbs the loss of a node.
 
 ## 3. Determinism rules for Rust code
 
@@ -161,8 +161,8 @@ Package names carry a `granite-` prefix (`crates/vsr` is the package `granite-vs
 | `crates/xshard` | Cross-shard protocol | vsr, shard |
 | `crates/query` | Scan fragment IR and vectorised operators | columnar, types |
 | `crates/protocol` | Message definitions, validation | base, types |
-| `crates/sim` | Simulator, fault injection, checkers, reference model | all of the above |
-| `crates/granite` | The single binary: `format`, `start`, `repl`, `bench`, `version`. Process bootstrap, configuration, shard supervision, benchmark harness | everything |
+| `crates/sim` | Simulator, fault injection, checkers, reference model, and its own runner binary. Never linked into the server | all of the above |
+| `crates/granite` | The single binary: `format`, `start`, `repl`, `bench`, `version`. Process bootstrap, configuration, shard supervision, benchmark harness | everything except `sim` |
 | `clients/rust` | Client library and codegen | protocol |
 | `clients/c` | C ABI over the Rust client, the base of the Go and Python clients | client |
 | `gateway` | Read-only SQL service on an external query engine; separate binary, not a workspace member, not linked into the server | client |

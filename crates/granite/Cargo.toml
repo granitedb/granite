@@ -26,5 +26,4 @@ granite-meta.workspace = true
 granite-xshard.workspace = true
 granite-query.workspace = true
 granite-protocol.workspace = true
-granite-sim.workspace = true
 granite-client.workspace = true

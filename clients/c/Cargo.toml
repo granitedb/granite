@@ -11,6 +11,8 @@ publish.workspace = true
 [lib]
 name = "granite_client"
 crate-type = ["staticlib", "cdylib"]
+# The library shares its file name with the Rust client and has no Rust API.
+doc = false
 
 [lints]
 workspace = true

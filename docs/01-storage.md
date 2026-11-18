@@ -26,7 +26,27 @@ Encryption at rest is delegated to the operating system or volume (LUKS, encrypt
 | WAL prepares | Ring of full prepares | slots x 1 MiB |
 | Grid | Fixed-size blocks, everything else | rest of file |
 
-Initial constants: 1024 WAL slots, message size 1 MiB, grid block 128 KiB. Client sessions (16,384 per group) and their last replies live in an internal LSM tree, not a dedicated zone.
+Client sessions and their last replies live in an internal LSM tree, not a dedicated zone.
+
+Initial constants. They are format constants: stored in the superblock, and a data file whose stored values differ from the binary's is refused. Their home is `crates/base/src/constants.rs`; a test compares this table with it.
+
+| Constant | Value |
+|---|---|
+| Sector size | 4 KiB |
+| WAL slots | 1,024 |
+| Message size, header included | 1 MiB |
+| Grid block size | 128 KiB |
+| Grid growth step | 1 GiB |
+| Pipeline depth (document 02 section 3) | 8 |
+| Compaction interval | 32 ops |
+| Checkpoint interval | 960 ops |
+| Client sessions per group (document 02 section 7) | 16,384 |
+| LSM level growth factor | 8 |
+| Chunk size target, multi-column groups | 32 KiB |
+| Rows per chunk, single-column groups | 8,192 |
+| Filter bits per key | 10 |
+
+The checkpoint interval is a multiple of the compaction interval, so a checkpoint falls between compaction beats, and it is smaller than the WAL slots minus the pipeline depth minus one compaction interval, so the WAL never overwrites a prepare the next checkpoint still needs (section 7).
 
 ### Superblock
 

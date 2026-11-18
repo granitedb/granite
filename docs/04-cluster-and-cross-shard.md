@@ -78,7 +78,7 @@ The **balancer** runs in the metadata group's state machine (deterministic, driv
 
 ## 4. Cross-shard transactions
 
-Derived from Granola (Cowling and Liskov, 2012). The description below is our adaptation; details that differ from the paper are marked. Checked against the paper on 2026-11-18: [04a-granola-sources.md](04a-granola-sources.md) gives the source of every rule in this section, or marks it as ours, and describes each deviation and the timestamp-mode proof obligations. The check against Cowling's thesis is still open (section 8).
+Derived from Granola (Cowling and Liskov, 2012). The description below is our adaptation; details that differ from the paper are marked. Checked against the paper and Cowling's thesis on 2026-11-18: [04a-granola-sources.md](04a-granola-sources.md) gives the source of every rule in this section, or marks it as ours, and describes each deviation and the timestamp-mode proof obligations.
 
 ### Cross-shard is the main path (confirmed 2026-11-17)
 
@@ -224,7 +224,7 @@ This is planned in the operations phase (roadmap E7.4). It reuses standbys, stat
 
 ## 8. To verify or decide
 
-- Granola's vote exchange path, recovery rules and timestamp-mode proof obligations: **answered from the paper** in [04a-granola-sources.md](04a-granola-sources.md) sections 3 to 5 (votes go primary to primary, with no coordinator). Still open: checking each rule marked "ours" and each proof obligation against Cowling's thesis, which could not be fetched on 2026-11-18.
+- Granola's vote exchange path, recovery rules and timestamp-mode proof obligations: **answered** from the paper and the thesis in [04a-granola-sources.md](04a-granola-sources.md) sections 3 to 5 (votes go primary to primary, with no coordinator).
 - Classification: **answered**, fully automatic from the IR and conservative (anything not provably infallible is coordinated); the `independent` annotation only guards against a silent change. Task T5.2.6. Reasoning in 04a section 5.
 - Bounds: **fixed** in section 4, "Bounds": 8 participants, 4,096 pending transactions per shard, a queue of 16,384.
 - The relocatable-part and clipped-part rules against the storage determinism invariant, including a crash of a target replica between reserve and install.

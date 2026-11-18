@@ -1,0 +1,364 @@
+U8 U8(0)
+  asc 00
+  desc ff
+  storage 00
+U8 U8(1)
+  asc 01
+  desc fe
+  storage 01
+U8 U8(255)
+  asc ff
+  desc 00
+  storage ff
+U16 U16(0)
+  asc 0000
+  desc ffff
+  storage 0000
+U16 U16(4660)
+  asc 1234
+  desc edcb
+  storage 3412
+U16 U16(65535)
+  asc ffff
+  desc 0000
+  storage ffff
+U32 U32(0)
+  asc 00000000
+  desc ffffffff
+  storage 00000000
+U32 U32(305419896)
+  asc 12345678
+  desc edcba987
+  storage 78563412
+U32 U32(4294967295)
+  asc ffffffff
+  desc 00000000
+  storage ffffffff
+U64 U64(0)
+  asc 0000000000000000
+  desc ffffffffffffffff
+  storage 0000000000000000
+U64 U64(72623859790382856)
+  asc 0102030405060708
+  desc fefdfcfbfaf9f8f7
+  storage 0807060504030201
+U64 U64(18446744073709551615)
+  asc ffffffffffffffff
+  desc 0000000000000000
+  storage ffffffffffffffff
+U128 U128(0)
+  asc 00000000000000000000000000000000
+  desc ffffffffffffffffffffffffffffffff
+  storage 00000000000000000000000000000000
+U128 U128(1)
+  asc 00000000000000000000000000000001
+  desc fffffffffffffffffffffffffffffffe
+  storage 01000000000000000000000000000000
+U128 U128(340282366920938463463374607431768211455)
+  asc ffffffffffffffffffffffffffffffff
+  desc 00000000000000000000000000000000
+  storage ffffffffffffffffffffffffffffffff
+U256 U256(U256 { hi: 0, lo: 0 })
+  asc 0000000000000000000000000000000000000000000000000000000000000000
+  desc ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+  storage 0000000000000000000000000000000000000000000000000000000000000000
+U256 U256(U256 { hi: 1, lo: 2 })
+  asc 0000000000000000000000000000000100000000000000000000000000000002
+  desc fffffffffffffffffffffffffffffffefffffffffffffffffffffffffffffffd
+  storage 0200000000000000000000000000000001000000000000000000000000000000
+U256 U256(U256 { hi: 340282366920938463463374607431768211455, lo: 340282366920938463463374607431768211455 })
+  asc ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+  desc 0000000000000000000000000000000000000000000000000000000000000000
+  storage ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+I8 I8(-128)
+  asc 00
+  desc ff
+  storage 80
+I8 I8(-1)
+  asc 7f
+  desc 80
+  storage ff
+I8 I8(0)
+  asc 80
+  desc 7f
+  storage 00
+I8 I8(1)
+  asc 81
+  desc 7e
+  storage 01
+I8 I8(127)
+  asc ff
+  desc 00
+  storage 7f
+I16 I16(-32768)
+  asc 0000
+  desc ffff
+  storage 0080
+I16 I16(-2)
+  asc 7ffe
+  desc 8001
+  storage feff
+I16 I16(0)
+  asc 8000
+  desc 7fff
+  storage 0000
+I16 I16(32767)
+  asc ffff
+  desc 0000
+  storage ff7f
+I32 I32(-2147483648)
+  asc 00000000
+  desc ffffffff
+  storage 00000080
+I32 I32(-3)
+  asc 7ffffffd
+  desc 80000002
+  storage fdffffff
+I32 I32(0)
+  asc 80000000
+  desc 7fffffff
+  storage 00000000
+I32 I32(2147483647)
+  asc ffffffff
+  desc 00000000
+  storage ffffff7f
+I64 I64(-9223372036854775808)
+  asc 0000000000000000
+  desc ffffffffffffffff
+  storage 0000000000000080
+I64 I64(-4)
+  asc 7ffffffffffffffc
+  desc 8000000000000003
+  storage fcffffffffffffff
+I64 I64(0)
+  asc 8000000000000000
+  desc 7fffffffffffffff
+  storage 0000000000000000
+I64 I64(9223372036854775807)
+  asc ffffffffffffffff
+  desc 0000000000000000
+  storage ffffffffffffff7f
+I128 I128(-170141183460469231731687303715884105728)
+  asc 00000000000000000000000000000000
+  desc ffffffffffffffffffffffffffffffff
+  storage 00000000000000000000000000000080
+I128 I128(-5)
+  asc 7ffffffffffffffffffffffffffffffb
+  desc 80000000000000000000000000000004
+  storage fbffffffffffffffffffffffffffffff
+I128 I128(0)
+  asc 80000000000000000000000000000000
+  desc 7fffffffffffffffffffffffffffffff
+  storage 00000000000000000000000000000000
+I128 I128(170141183460469231731687303715884105727)
+  asc ffffffffffffffffffffffffffffffff
+  desc 00000000000000000000000000000000
+  storage ffffffffffffffffffffffffffffff7f
+I256 I256(I256 { hi: -170141183460469231731687303715884105728, lo: 0 })
+  asc 0000000000000000000000000000000000000000000000000000000000000000
+  desc ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+  storage 0000000000000000000000000000000000000000000000000000000000000080
+I256 I256(I256 { hi: -1, lo: 340282366920938463463374607431768211455 })
+  asc 7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+  desc 8000000000000000000000000000000000000000000000000000000000000000
+  storage ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+I256 I256(I256 { hi: 0, lo: 0 })
+  asc 8000000000000000000000000000000000000000000000000000000000000000
+  desc 7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+  storage 0000000000000000000000000000000000000000000000000000000000000000
+I256 I256(I256 { hi: 170141183460469231731687303715884105727, lo: 340282366920938463463374607431768211455 })
+  asc ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+  desc 0000000000000000000000000000000000000000000000000000000000000000
+  storage ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f
+Decimal { precision: 9, scale: 2 } Decimal32(-12345)
+  asc 7fffcfc7
+  desc 80003038
+  storage c7cfffff
+Decimal { precision: 9, scale: 2 } Decimal32(0)
+  asc 80000000
+  desc 7fffffff
+  storage 00000000
+Decimal { precision: 9, scale: 2 } Decimal32(999999999)
+  asc bb9ac9ff
+  desc 44653600
+  storage ffc99a3b
+Decimal { precision: 18, scale: 4 } Decimal64(-1)
+  asc 7fffffffffffffff
+  desc 8000000000000000
+  storage ffffffffffffffff
+Decimal { precision: 18, scale: 4 } Decimal64(123456789012)
+  asc 8000001cbe991a14
+  desc 7fffffe34166e5eb
+  storage 141a99be1c000000
+Decimal { precision: 38, scale: 18 } Decimal128(-1)
+  asc 7fffffffffffffffffffffffffffffff
+  desc 80000000000000000000000000000000
+  storage ffffffffffffffffffffffffffffffff
+Decimal { precision: 38, scale: 18 } Decimal128(10000000000000000000000000000000000000)
+  asc 8785ee10d5da46d900f436a000000000
+  desc 787a11ef2a25b926ff0bc95fffffffff
+  storage 00000000a036f400d946dad510ee8507
+Decimal { precision: 76, scale: 20 } Decimal256(I256 { hi: -2, lo: 7 })
+  asc 7ffffffffffffffffffffffffffffffe00000000000000000000000000000007
+  desc 80000000000000000000000000000001fffffffffffffffffffffffffffffff8
+  storage 07000000000000000000000000000000feffffffffffffffffffffffffffffff
+Decimal { precision: 76, scale: 20 } Decimal256(I256 { hi: 3, lo: 0 })
+  asc 8000000000000000000000000000000300000000000000000000000000000000
+  desc 7ffffffffffffffffffffffffffffffcffffffffffffffffffffffffffffffff
+  storage 0000000000000000000000000000000003000000000000000000000000000000
+F32 F32(-0.0)
+  asc -
+  desc -
+  storage 00000080
+F32 F32(1.5)
+  asc -
+  desc -
+  storage 0000c03f
+F32 F32(-inf)
+  asc -
+  desc -
+  storage 000080ff
+F32 F32(NaN)
+  asc -
+  desc -
+  storage 0000c07f
+F64 F64(-0.0)
+  asc -
+  desc -
+  storage 0000000000000080
+F64 F64(1.5)
+  asc -
+  desc -
+  storage 000000000000f83f
+F64 F64(inf)
+  asc -
+  desc -
+  storage 000000000000f07f
+F64 F64(NaN)
+  asc -
+  desc -
+  storage 000000000000f87f
+Bool Bool(false)
+  asc 00
+  desc ff
+  storage 00
+Bool Bool(true)
+  asc 01
+  desc fe
+  storage 01
+Date Date(-1)
+  asc 7fffffff
+  desc 80000000
+  storage ffffffff
+Date Date(0)
+  asc 80000000
+  desc 7fffffff
+  storage 00000000
+Date Date(20000)
+  asc 80004e20
+  desc 7fffb1df
+  storage 204e0000
+Timestamp(Nanos) Timestamp(-1)
+  asc 7fffffffffffffff
+  desc 8000000000000000
+  storage ffffffffffffffff
+Timestamp(Nanos) Timestamp(1763424000000000000)
+  asc 9878f0c8f4660000
+  desc 67870f370b99ffff
+  storage 000066f4c8f07818
+Timestamp(Seconds) Timestamp(1763424000)
+  asc 80000000691bb700
+  desc 7fffffff96e448ff
+  storage 00b71b6900000000
+Duration(Millis) Duration(-1500)
+  asc 7ffffffffffffa24
+  desc 80000000000005db
+  storage 24faffffffffffff
+Duration(Millis) Duration(0)
+  asc 8000000000000000
+  desc 7fffffffffffffff
+  storage 0000000000000000
+Duration(Micros) Duration(1)
+  asc 8000000000000001
+  desc 7ffffffffffffffe
+  storage 0100000000000000
+Uuid Uuid([85, 14, 132, 0, 226, 155, 65, 212, 167, 22, 68, 102, 85, 68, 0, 0])
+  asc 550e8400e29b41d4a716446655440000
+  desc aaf17bff1d64be2b58e9bb99aabbffff
+  storage 550e8400e29b41d4a716446655440000
+Id128 Id128(0)
+  asc 00000000000000000000000000000000
+  desc ffffffffffffffffffffffffffffffff
+  storage 00000000000000000000000000000000
+Id128 Id128(2094003775639089011327432609900785665)
+  asc 01934a5b6c7d7e8f9aabbccddeeff001
+  desc fe6cb5a4938281706554433221100ffe
+  storage 01f0efdecdbcab9a8f7e7d6c5b4a9301
+String { max: 16 } String("")
+  asc 0000
+  desc ffff
+  storage -
+String { max: 16 } String("a")
+  asc 610000
+  desc 9effff
+  storage -
+String { max: 16 } String("a\0b")
+  asc 6100ff620000
+  desc 9eff009dffff
+  storage -
+String { max: 16 } String("héllo")
+  asc 68c3a96c6c6f0000
+  desc 973c56939390ffff
+  storage -
+Bytes { max: 16 } Bytes([])
+  asc 0000
+  desc ffff
+  storage -
+Bytes { max: 16 } Bytes([0])
+  asc 00ff0000
+  desc ff00ffff
+  storage -
+Bytes { max: 16 } Bytes([0, 255, 1])
+  asc 00ffff010000
+  desc ff0000feffff
+  storage -
+FixedBytes(3) FixedBytes([0, 255, 7])
+  asc 00ff07
+  desc ff00f8
+  storage 00ff07
+Enum8 { max: 3 } Enum8(0)
+  asc 00
+  desc ff
+  storage 00
+Enum8 { max: 3 } Enum8(3)
+  asc 03
+  desc fc
+  storage 03
+Enum16 { max: 999 } Enum16(0)
+  asc 0000
+  desc ffff
+  storage 0000
+Enum16 { max: 999 } Enum16(999)
+  asc 03e7
+  desc fc18
+  storage e703
+Nullable(I32) Null
+  asc -
+  desc -
+  storage 0000000000
+Nullable(I32) I32(-3)
+  asc -
+  desc -
+  storage 01fdffffff
+Nullable(String { max: 4 }) Null
+  asc -
+  desc -
+  storage -
+LowCardinality(String { max: 16 }) String("eur")
+  asc 6575720000
+  desc 9a8a8dffff
+  storage -
+LowCardinality(U16) U16(7)
+  asc 0007
+  desc fff8
+  storage 0700

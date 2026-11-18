@@ -42,6 +42,42 @@ Strictness:
 - Default is NOT NULL. Defaults must be constants.
 - Row size has a static upper bound computed from the schema; it must fit the message size with headroom, otherwise the schema is rejected.
 
+Values in memory (`crates/types`): integers are the Rust integers of their width; u256 and i256 are two 128-bit halves, `hi` (u128, or i128 for i256) and `lo` (u128), whose two's complement value is `hi * 2^128 + lo`. A Decimal(P, S) holds its mantissa `m`, the value being `m / 10^S`, in an i32 for P <= 9, an i64 for P <= 18, an i128 for P <= 38 and an i256 above. Date is an i32, Timestamp and Duration an i64 (units of 10^-p seconds), Uuid 16 bytes in RFC 9562 order, Id128 a u128, Enum8 and Enum16 the u8 or u16 index of a declared value. P is from 1 to 76, S from 0 to P; FixedBytes(N) needs N from 1 to the row size limit of section 8; Nullable and LowCardinality do not nest in themselves, nor does Nullable through LowCardinality.
+
+### 2.1 Key encoding (part of the format)
+
+Every byte below is part of the on-disk format: keys of LSM trees and indexes are compared as unsigned bytes, lowest address first (`memcmp` order), so the encoding must give the logical order. A change to any of it needs a new format version (document 01 section 2). The golden vectors in `crates/types/tests/golden_vectors.txt` show each type's bytes and are checked on every CI platform.
+
+A key is the concatenation of its columns' encodings, in key order, with no separator or length. Floats and Nullable(T) are rejected in every key with the error `NotAllowedInKey`; LowCardinality(T) is encoded as T.
+
+| Type | Bytes | Encoding |
+|---|---|---|
+| u8, u16, u32, u64, u128 | 1, 2, 4, 8, 16 | The value, big-endian. |
+| u256 | 32 | `hi` big-endian, then `lo` big-endian: the value big-endian. |
+| i8, i16, i32, i64, i128 | 1, 2, 4, 8, 16 | The two's complement value with its sign bit inverted, big-endian. The minimum encodes as all 0x00, -1 as 0x7F FF.., zero as 0x80 00.., the maximum as all 0xFF. |
+| i256 | 32 | `hi` with its sign bit inverted, big-endian, then `lo` big-endian. |
+| Decimal(P, S) | 4, 8, 16, 32 | The mantissa as an i32, i64, i128 or i256 by P, as above. S is not encoded: all values of a column share it. |
+| bool | 1 | 0x00 false, 0x01 true. |
+| Date | 4 | As i32. |
+| Timestamp(p), Duration(p) | 8 | As i64. p is not encoded. |
+| Uuid | 16 | The 16 bytes unchanged. |
+| Id128 | 16 | The u128 big-endian, so the byte order is the numeric order. |
+| String(max), Bytes(max) | 2 to 2 x len + 2 | Each byte of the content (UTF-8 for String) is copied, except that 0x00 is written as 0x00 0xFF; then the terminator 0x00 0x00. |
+| FixedBytes(N) | N | The N bytes unchanged. |
+| Enum8, Enum16 | 1, 2 | The index, big-endian. Indexes are assigned in declaration order and values are append-only, so the key order is the declaration order. |
+
+Why the variable-length encoding is order-preserving: inside the content a 0x00 is always followed by 0xFF, so the terminator 0x00 0x00 cannot occur there. At the first byte where two encodings differ, either both are content bytes (the contents differ there), or one is the terminator's second 0x00 against an escape 0xFF (the shorter content ends where the longer one has a 0x00), or the terminator's first 0x00 against a content byte above 0x00 (the shorter content ends first). In every case the shorter or byte-wise smaller content sorts first, which is binary collation. No encoding is a proper prefix of a different encoding of the same type, so a column's encoding ends where the next column begins and composite keys sort column by column.
+
+Descending columns: every byte of the column's ascending encoding is inverted (`b XOR 0xFF`), including the terminator. Because encodings of one type are prefix-free, the first differing byte lies inside both, and inverting it reverses the comparison exactly.
+
+The encoded primary key, all columns included, must not exceed the primary key limit of section 8; a longer key is rejected with `KeyTooLarge`. Escaping counts toward the limit.
+
+The bit layout inside an Id128 (a millisecond timestamp in the high bits) is defined by its generator, T0.2.4; the key encoding treats it only as an unsigned 128-bit integer, so any layout whose numeric order is the creation order sorts by creation time.
+
+### 2.2 Fixed-width storage representation (part of the format)
+
+How one value is stored in a row or a column. Every type except String and Bytes has a fixed width. Integers, Decimal mantissas, Date, Timestamp, Duration, Id128 and enum indexes are little-endian two's complement in the widths of section 2.1; u256 and i256 are `lo` then `hi`, both little-endian, which is the 32-byte value little-endian. f32 and f64 are their IEEE 754 bits, little-endian, with every NaN replaced by the canonical NaN (0x7FC00000 for f32, 0x7FF8000000000000 for f64); a stored NaN with other bits is rejected on read. -0.0 is kept. bool is 0x00 or 0x01. Uuid and FixedBytes(N) are their bytes. Nullable(T) is one flag byte, 0x00 null and 0x01 present, followed by T's representation; for a null those bytes are all zero, which is checked on read. LowCardinality(T) is stored as T; its dictionary encoding belongs to the column layout of document 01.
+
 ## 3. Table kinds
 
 **`immutable`**: rows are inserted once and never change. Insert of an existing primary key fails (or is reported as a duplicate, idempotently, if all columns match). This is the event log.

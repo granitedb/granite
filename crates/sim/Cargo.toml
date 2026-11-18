@@ -1,0 +1,28 @@
+[package]
+name = "granite-sim"
+description = "Deterministic simulator, fault injection, checkers and reference model."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+granite-base.workspace = true
+granite-io.workspace = true
+granite-storage.workspace = true
+granite-lsm.workspace = true
+granite-columnar.workspace = true
+granite-types.workspace = true
+granite-schema.workspace = true
+granite-txn.workspace = true
+granite-shard.workspace = true
+granite-vsr.workspace = true
+granite-meta.workspace = true
+granite-xshard.workspace = true
+granite-query.workspace = true
+granite-protocol.workspace = true

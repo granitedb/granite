@@ -1,0 +1,12 @@
+[package]
+name = "granite-base"
+description = "Checksums, fixed-layout helpers, ids, error codes and constants."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

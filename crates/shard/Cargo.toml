@@ -1,0 +1,16 @@
+[package]
+name = "granite-shard"
+description = "Shard state machine: operations, sessions, locks and pending transactions."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+granite-txn.workspace = true
+granite-columnar.workspace = true

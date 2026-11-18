@@ -1,0 +1,15 @@
+[package]
+name = "granite-gateway"
+description = "Read-only SQL gateway for Granite."
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.96"
+license = "Apache-2.0"
+repository = "https://github.com/granitedb/granite"
+publish = false
+
+# Not a member of the root workspace: see the root Cargo.toml.
+[workspace]
+
+[dependencies]
+granite-client = { path = "../clients/rust" }

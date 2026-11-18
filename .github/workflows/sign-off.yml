@@ -1,0 +1,36 @@
+name: Sign-off
+
+# Every commit in a pull request must carry a Signed-off-by line from its
+# author (Developer Certificate of Origin, see CONTRIBUTING.md).
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  sign-off:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Every commit is signed off by its author
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          bad=0
+          for c in $(git rev-list "$BASE..$HEAD"); do
+            want="Signed-off-by: $(git log -1 --format='%an <%ae>' "$c")"
+            git log -1 --format='%(trailers:key=Signed-off-by)' "$c" | grep -qxF "$want" \
+              || { echo "::error::$(git log -1 --format='%h %s' "$c"): missing '$want'"; bad=1; }
+          done
+          exit "$bad"

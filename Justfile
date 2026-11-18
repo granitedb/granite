@@ -7,8 +7,8 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 default:
     @just --list --unsorted
 
-# Everything CI checks: crate directions, formatting, lints, tests, the API docs, and the gateway build.
-check: crate-graph fmt-check lint test doc gateway roadmap-plan
+# Everything CI checks: crate directions, formatting, lints, tests, the API docs, the gateway build, and dependency licences and advisories.
+check: crate-graph fmt-check lint test doc gateway roadmap-plan deny
 
 # Fail if a crate depends on another against the allowed direction (docs/06 section 5).
 crate-graph:
@@ -39,6 +39,11 @@ lint:
 # Check the SQL gateway, which is built outside the workspace.
 gateway:
     cargo clippy --manifest-path gateway/Cargo.toml --all-targets --locked -- -D warnings
+
+# Check dependency licences, advisories, bans and sources (deny.toml), for the workspace and the gateway.
+deny:
+    cargo deny --locked check
+    cargo deny --locked --manifest-path gateway/Cargo.toml check
 
 # Run the granite binary, for example `just run version`.
 run *args:

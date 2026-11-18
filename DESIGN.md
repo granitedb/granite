@@ -8,8 +8,10 @@ This file is the entry point. Details live in `docs/`:
 |---|---|
 | [docs/01-storage.md](docs/01-storage.md) | Data file, WAL, grid, LSM, columnar part format, codecs, compaction |
 | [docs/02-replication.md](docs/02-replication.md) | VSR protocol, repair, checkpoints, state sync, clocks, client sessions |
+| [docs/02a-replication-sources.md](docs/02a-replication-sources.md) | Source of every replication rule, deviations from VR Revisited, PAR and TigerBeetle |
 | [docs/03-data-model-and-transactions.md](docs/03-data-model-and-transactions.md) | Types, schema, table kinds, transaction IR, derived tables, single-shard execution |
 | [docs/04-cluster-and-cross-shard.md](docs/04-cluster-and-cross-shard.md) | Nodes, shards, groups, tablets, metadata group, rebalancing, cross-shard protocol |
+| [docs/04a-granola-sources.md](docs/04a-granola-sources.md) | Source of every cross-shard rule, deviations from Granola, timestamp-mode proof obligations |
 | [docs/05-query-and-protocol.md](docs/05-query-and-protocol.md) | Wire protocol, client library, read paths, analytical execution |
 | [docs/06-testing-and-engineering.md](docs/06-testing-and-engineering.md) | Simulator, checkers, model checking, coding rules, crates, benchmarks |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Phases, epics, issue-sized tasks with acceptance criteria |

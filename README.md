@@ -20,9 +20,9 @@ It draws on ideas from TigerBeetle, TiDB, ClickHouse and ScyllaDB. It is not aff
 
 - [Design overview](DESIGN.md)
 - [Storage engine](docs/01-storage.md)
-- [Replication](docs/02-replication.md)
+- [Replication](docs/02-replication.md) and [its sources](docs/02a-replication-sources.md)
 - [Data model and transactions](docs/03-data-model-and-transactions.md)
-- [Cluster and cross-shard transactions](docs/04-cluster-and-cross-shard.md)
+- [Cluster and cross-shard transactions](docs/04-cluster-and-cross-shard.md) and [their sources](docs/04a-granola-sources.md)
 - [Query and protocol](docs/05-query-and-protocol.md)
 - [Testing and engineering](docs/06-testing-and-engineering.md)
 - [Roadmap](docs/ROADMAP.md)

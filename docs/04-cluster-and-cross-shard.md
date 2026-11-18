@@ -208,7 +208,7 @@ Revised 2026-11-18: no cluster-wide safe timestamp is computed and the metadata 
 7. A tablet move loses and duplicates no row.
 
 8. A promoted standby site holds a state equal to the primary site's state at one single timestamp: no cross-shard transaction is present on some groups and absent on others.
-9. A group that is unreachable delays only transactions that name it or that conflict by key with transactions pending against it.
+9. A group that is unreachable delays only transactions that name it or that conflict by key with transactions pending against it, directly or through a chain of queued transactions that each conflict by key with the next (the bypass of section 4 lets nothing overtake an unexecuted transaction on the same key).
 
 ## 7. Asynchronous standby site (confirmed 2026-11-18)
 

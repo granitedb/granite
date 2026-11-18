@@ -75,7 +75,7 @@ Design reference: `docs/04-cluster-and-cross-shard.md` sections 4 to 6. "Invaria
 **Goal.** The product's main path: a transaction across several groups that cannot fail, with no locks and no aborts.
 
 **Work.**
-- `propose` as a logged op: pick a proposed timestamp above every timestamp issued and at least the client's, record the transaction as pending.
+- `propose` as a logged op: pick a proposed timestamp above every timestamp issued and strictly above the client's (document 04 section 4), record the transaction as pending.
 - A vote sent to the other participants when the propose op commits.
 - `finalize` as a logged op once all votes are in: final timestamp is the maximum of the votes.
 - Execution when the transaction reaches the head of the timestamp order.
@@ -123,10 +123,10 @@ Design reference: `docs/04-cluster-and-cross-shard.md` sections 4 to 6. "Invaria
 
 **Work.**
 - `prepare` as a logged op: evaluate local requires, try to lock the declared keys, vote commit, abort with a code, or conflict.
-- The rule that a coordinated prepare finding a locked key votes conflict at once and takes no locks.
+- The rule that a coordinated prepare finding a locked key, or a key of a transaction that has not executed yet (pending or queued), votes conflict at once and takes no locks.
 - `finalize`: commit at the maximum proposed timestamp if all voted commit, else abort; release locks; execute the writes if committed.
 - A lock table in an internal LSM tree, replicated, surviving view changes.
-- Single-shard and independent transactions touching a locked key wait in the bounded shard queue.
+- Single-shard and independent transactions touching a locked key wait in the bounded shard queue, and take their timestamp only when the lock is released (document 04 section 4).
 
 **Not in this card.** Client retry on conflict (T5.2.7).
 
@@ -456,13 +456,13 @@ Design reference: `docs/04-cluster-and-cross-shard.md` sections 4 to 6. "Invaria
 
 ## T5.4.3 Conflict-aware bypass (required)
 
-**Goal.** A transaction that does not touch the keys of any pending transaction runs immediately. This is required for failure isolation: without it one dead group stalls the cluster.
+**Goal.** A transaction that does not touch the keys of any earlier transaction that has not executed yet (pending, or finalized and still queued) runs immediately. This is required for failure isolation: without it one dead group stalls the cluster.
 
 **Work.**
-- A check of each incoming transaction's declared key set against the key sets of all pending transactions.
+- A check of each incoming transaction's declared key set against the key sets of all earlier transactions that have not executed yet: pending, and finalized but still queued (document 04 section 4).
 - No intersection: execute at once, at a timestamp later than the pending proposals.
 - Intersection: wait in the timestamp-order queue.
-- An index over pending key sets so the check is cheap.
+- An index over those key sets so the check is cheap.
 - Snapshot reads still respect the shard safe timestamp.
 
 **Not in this card.** Fail-fast rejection (T5.4.4).

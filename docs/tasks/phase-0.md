@@ -118,7 +118,7 @@ Phase exit: an empty cluster of simulated shards exchanges checksummed messages 
 **Goal.** Every limit in the design lives in one place, and a combination of limits that cannot work fails to compile.
 
 **Work.**
-- A module in `crates/base` holding every constant from the design documents: sector size, message size, WAL slot count, grid block size, pipeline depth, session count, checkpoint interval, limits table of document 03 section 8, timing budget of document 02 section 0.
+- A module in `crates/base` holding every constant from the design documents: sector size, message size, WAL slot count, grid block size, pipeline depth, session count, checkpoint interval, limits table of document 03 section 8, timing budget of document 02 section 0, cross-shard bounds of document 04 section 4.
 - Compile-time assertions on the relationships between them.
 - A split between format constants (fixed at cluster format, stored in the superblock) and process configuration (set at start).
 - A runtime check that compares the binary's format constants with a data file's.

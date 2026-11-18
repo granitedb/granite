@@ -128,7 +128,7 @@ Phase exit: an empty cluster of simulated shards exchanges checksummed messages 
 **Depends on.** T0.1.1.
 
 **Gates.**
-- [ ] No numeric limit from the design documents appears as a literal anywhere outside this module. A lint or a grep-based test enforces it.
+- [ ] No numeric limit of 256 or more from the design documents appears as a literal anywhere outside this module, and a grep-based test enforces it. Limits below 256 cannot be told apart from ordinary integers by a grep and are a review item.
 - [ ] Each of these fails to compile when violated (one test per rule, using a compile-fail test): message size is a multiple of the sector size; grid block size is a multiple of the sector size; the checkpoint interval is smaller than the WAL slot count minus the pipeline depth minus one compaction interval; the row size limit plus header fits in a message; the header is exactly 256 bytes.
 - [ ] Every constant has a doc comment naming the document section it comes from.
 - [ ] A table generated from the module is compared in CI with the tables in the design documents, and a mismatch fails the check.

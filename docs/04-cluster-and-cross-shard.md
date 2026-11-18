@@ -141,7 +141,7 @@ The queue is part of replicated state and bounded; when full, new requests get `
 | Pending transactions per shard | 4,096 | A transaction is pending from propose to execute: two replication rounds (propose, finalize) plus one hop, under 2 ms in one data center. At 100,000 cross-shard transactions per second on one shard that is about 200 pending; 4,096 covers a 40 ms stall at that rate, or a 200 ms view change of a peer at 20,000 per second, before `busy`. It is also the size the bypass check is measured at (T5.4.3). |
 | Queue length (work waiting behind an older transaction) | 16,384 | Single-shard writes in the queue each hold a client session, which has one write in flight (document 02 section 7), so they cannot exceed the 16,384 sessions of a group. A cross-shard transaction takes a pending entry when it is accepted, including while it waits for a lock before proposing, so cross-shard work in the queue is counted in the pending limit. The queue therefore fills only if that rule is broken, and `busy` is the safety net. |
 
-These values move to the constants module (T0.1.4), with a static assertion that the queue length is at least the session capacity of a group. Until that module exists, this table is their only home.
+These values live in `crates/base/src/constants.rs`, with a static assertion that the queue length is at least the session capacity of a group; a test compares this table with the module.
 
 ### Failure isolation
 
@@ -153,7 +153,7 @@ With strict order alone, one group that loses its quorum would stall the whole c
 
 ### Duplicate requests
 
-A cross-shard transaction is identified by its client-chosen time-ordered id. Each participant keeps finished transaction ids and outcomes in an internal tree for a retention window (initially one hour of commit time) and answers a duplicate from it. A transaction id older than the window is rejected with `too_old`, never re-executed.
+A cross-shard transaction is identified by its client-chosen time-ordered id. Each participant keeps finished transaction ids and outcomes in an internal tree for a retention window (initially 1 hour of commit time) and answers a duplicate from it. A transaction id older than the window is rejected with `too_old`, never re-executed.
 
 ### Coordinated transaction
 

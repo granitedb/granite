@@ -27,6 +27,17 @@ It draws on ideas from TigerBeetle, TiDB, ClickHouse and ScyllaDB. It is not aff
 - [Testing and engineering](docs/06-testing-and-engineering.md)
 - [Roadmap](docs/ROADMAP.md)
 
+## Building
+
+Requires Rust 1.96 and [just](https://github.com/casey/just).
+
+```
+just check      # format check, lints, tests: what CI runs
+just run version
+```
+
+Run `just` to list all recipes. The repository layout is described in [docs/06-testing-and-engineering.md](docs/06-testing-and-engineering.md) section 5.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Security issues: see [SECURITY.md](SECURITY.md).

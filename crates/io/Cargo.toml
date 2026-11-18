@@ -1,0 +1,15 @@
+[package]
+name = "granite-io"
+description = "Storage, network and time traits, and their backends."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+granite-base.workspace = true

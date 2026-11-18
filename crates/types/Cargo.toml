@@ -1,0 +1,15 @@
+[package]
+name = "granite-types"
+description = "Type system, encodings and expressions."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+granite-base.workspace = true

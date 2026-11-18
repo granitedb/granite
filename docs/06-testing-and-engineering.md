@@ -105,7 +105,7 @@ The reference model is a small, obviously correct in-memory implementation of th
 - **Client conformance suite:** one set of scenarios that the Rust, Go and Python clients must all pass, including retries, failover and stale maps.
 - **Gateway:** SQL results compared against the reference model over a query corpus; fault tests for mid-query view changes.
 - **Real-hardware tests:** crash consistency with power-fail injection (dm-flakey or similar), long soak tests, Jepsen-style tests on real machines before any release.
-- **Assertions:** preconditions, postconditions and invariants are asserted in production code and left enabled in release builds. A failed assertion crashes the shard; replication absorbs it.
+- **Assertions:** preconditions, postconditions and invariants are asserted in production code and left enabled in release builds. A failed assertion aborts the process, so it stops every shard on that node; replication absorbs it, as it absorbs the loss of a node.
 
 ## 3. Determinism rules for Rust code
 
@@ -124,31 +124,52 @@ Enforced by clippy configuration, custom lints or review checklists:
 - Shard threads are pinned; memory is allocated from the local NUMA node; interrupts steered away where possible.
 - Scheduling classes with budgets (document 05).
 
-## 5. Crates
+## 5. Repository layout and crates
 
-| Crate | Responsibility | Depends on |
+Everything lives in one repository and is versioned and tested together: the database, the client libraries, the gateway, the simulator, the protocol models, the benchmarks and these documents.
+
+```
+Cargo.toml            workspace root: shared lints, versions, internal dependencies
+Justfile              task recipes; CI runs `just check`
+rust-toolchain.toml   pinned compiler
+docs/                 design documents and roadmap
+crates/               the database, one folder per crate
+clients/              rust, c (C ABI), go, python
+gateway/              read-only SQL gateway, built outside the workspace
+schemas/              reference schemas
+fuzz/                 fuzz targets
+models/               protocol specifications
+bench/                workload definitions and stored results
+tools/                repository scripts
+```
+
+Package names carry a `granite-` prefix (`crates/vsr` is the package `granite-vsr`). Dependencies in the table are the allowed direction; the workspace manifest is the place where they are declared.
+
+| Path | Responsibility | Depends on |
 |---|---|---|
-| `base` | Checksums, fixed-layout helpers, ids, error codes, constants | |
-| `io` | Traits and the three backends | base |
-| `sim` | Simulator, fault injection, checkers, reference model | all |
-| `storage` | Superblock, WAL, grid, free set, block cache | base, io |
-| `lsm` | Memtable, manifest, levels, compaction, iterators | storage |
-| `columnar` | Part format, codecs, filters, skip indexes | lsm |
-| `types` | Type system, encodings, expressions | base |
-| `schema` | Catalog objects and validation | types |
-| `txn` | Program IR, validator, executor | schema, lsm |
-| `shard` | State machine: operations, sessions, locks, pending transactions | txn, columnar |
-| `vsr` | Replica, client-session protocol, repair, sync, clock | storage, io |
-| `meta` | Metadata state machine, balancer | vsr |
-| `xshard` | Cross-shard protocol | vsr, shard |
-| `query` | Scan fragment IR and vectorised operators | columnar, types |
-| `gateway` | Read-only SQL service on an external query engine; separate binary, not linked into the server | client |
-| `protocol` | Message definitions, validation | base, types |
-| `client` | Client library, codegen, C ABI | protocol |
-| `server` | Process bootstrap, configuration, shard supervision | everything |
-| `bench` | Workloads and harness | client |
+| `crates/base` | Checksums, fixed-layout helpers, ids, error codes, constants | |
+| `crates/io` | Traits and the three backends | base |
+| `crates/storage` | Superblock, WAL, grid, free set, block cache | base, io |
+| `crates/lsm` | Memtable, manifest, levels, compaction, iterators | storage |
+| `crates/columnar` | Part format, codecs, filters, skip indexes | lsm |
+| `crates/types` | Type system, encodings, expressions | base |
+| `crates/schema` | Catalog objects and validation | types |
+| `crates/txn` | Program IR, validator, executor | schema, lsm |
+| `crates/shard` | State machine: operations, sessions, locks, pending transactions | txn, columnar |
+| `crates/vsr` | Replica, client-session protocol, repair, sync, clock | storage, io |
+| `crates/meta` | Metadata state machine, balancer | vsr |
+| `crates/xshard` | Cross-shard protocol | vsr, shard |
+| `crates/query` | Scan fragment IR and vectorised operators | columnar, types |
+| `crates/protocol` | Message definitions, validation | base, types |
+| `crates/sim` | Simulator, fault injection, checkers, reference model, and its own runner binary. Never linked into the server | all of the above |
+| `crates/granite` | The single binary: `format`, `start`, `repl`, `bench`, `version`. Process bootstrap, configuration, shard supervision, benchmark harness | everything except `sim` |
+| `clients/rust` | Client library and codegen | protocol |
+| `clients/c` | C ABI over the Rust client, the base of the Go and Python clients | client |
+| `gateway` | Read-only SQL service on an external query engine; separate binary, not a workspace member, not linked into the server | client |
 
-External dependencies are kept minimal and audited: `io-uring`, `zerocopy` or `bytemuck`, `rustls`, vendored `lz4`/`zstd`, a checksum crate.
+The server, its tools and the benchmark harness ship as one binary so that a tool always matches the server version. The gateway is kept out of the workspace so that its large dependency tree never enters the database build.
+
+External dependencies are kept minimal and audited: `io-uring`, `zerocopy` or `bytemuck`, `rustls`, vendored `lz4`/`zstd`, a checksum crate. Adding a dependency to the workspace needs a stated reason in the change that adds it.
 
 ## 6. Benchmarks
 

@@ -1,0 +1,21 @@
+[package]
+name = "granite-client-c"
+description = "C ABI for the Granite client, used by the Go and Python clients."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+name = "granite_client"
+crate-type = ["staticlib", "cdylib"]
+# The library shares its file name with the Rust client and has no Rust API.
+doc = false
+
+[lints]
+workspace = true
+
+[dependencies]
+granite-client.workspace = true

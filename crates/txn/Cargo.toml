@@ -1,0 +1,16 @@
+[package]
+name = "granite-txn"
+description = "Transaction program representation, validator and executor."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+granite-schema.workspace = true
+granite-lsm.workspace = true

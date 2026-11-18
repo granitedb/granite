@@ -1,0 +1,47 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "clients/rust", "clients/c"]
+# The SQL gateway links a large external query engine. It is built on its own
+# so that the database's dependency tree stays small.
+exclude = ["gateway"]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.96"
+license = "Apache-2.0"
+repository = "https://github.com/granitedb/granite"
+publish = false
+
+[workspace.dependencies]
+granite-base = { path = "crates/base" }
+granite-io = { path = "crates/io" }
+granite-storage = { path = "crates/storage" }
+granite-lsm = { path = "crates/lsm" }
+granite-columnar = { path = "crates/columnar" }
+granite-types = { path = "crates/types" }
+granite-schema = { path = "crates/schema" }
+granite-txn = { path = "crates/txn" }
+granite-shard = { path = "crates/shard" }
+granite-vsr = { path = "crates/vsr" }
+granite-meta = { path = "crates/meta" }
+granite-xshard = { path = "crates/xshard" }
+granite-query = { path = "crates/query" }
+granite-protocol = { path = "crates/protocol" }
+granite-sim = { path = "crates/sim" }
+granite-client = { path = "clients/rust" }
+
+[workspace.lints.rust]
+# Crates that need `unsafe` (io, pools, SIMD kernels) allow it per module,
+# with a written safety argument on every block.
+unsafe_code = "deny"
+unused_must_use = "deny"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[profile.release]
+# Assertions and overflow checks stay enabled in release builds.
+debug-assertions = true
+overflow-checks = true
+panic = "abort"

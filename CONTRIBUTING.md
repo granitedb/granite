@@ -7,6 +7,7 @@ The project is in its design phase. The most useful contributions right now are 
 - Design changes are made in the documents under `docs/`, in the same change as any code they affect.
 - Work is tracked as GitHub issues. Each task issue states what "done" means; a change is complete when that statement is true and demonstrated.
 - Correctness comes first. Changes to replication, storage or transaction code need simulator coverage, and protocol changes need an updated specification.
+- `just check` must pass before a change is proposed; CI runs the same recipe.
 - Follow the determinism rules in [docs/06-testing-and-engineering.md](docs/06-testing-and-engineering.md) section 3.
 
 ## Sign-off (Developer Certificate of Origin)

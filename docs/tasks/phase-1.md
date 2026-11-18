@@ -49,6 +49,7 @@ Design reference for the whole phase: `docs/01-storage.md`.
 - [ ] A copy written at the wrong offset (misdirected write) is not accepted as a copy for its position (test).
 - [ ] Updating to a sequence number that is not exactly the previous plus one is rejected by an assertion.
 - [ ] The update without the quorum rule, as a deliberate defect, fails within 1,000 seeds (injected bug).
+- [ ] Opening a data file whose stored format constants differ from the binary's is refused with a typed error naming the constant (`FormatMismatch` from `crates/base/src/constants.rs`) (from T0.1.4).
 
 ## T1.1.3 WAL: header ring and prepare ring, write path
 

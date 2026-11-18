@@ -58,15 +58,14 @@ Phase exit: an empty cluster of simulated shards exchanges checksummed messages 
 - A second virtual disk formatted for direct I/O tests, since shared host folders usually do not support `O_DIRECT`.
 - A short document: requirements, first-time setup, known limits.
 
-**Not in this card.** Performance testing in the virtual machine. Numbers from it are never evidence.
+**Not in this card.** Performance testing in the virtual machine. Numbers from it are never evidence. Running the Io conformance suite in `just vm-check` is a gate of T0.3.2, which builds that suite.
 
-**Depends on.** T0.1.1. The last gate also needs T0.3.2.
+**Depends on.** T0.1.1.
 
 **Gates.**
 - [ ] On a macOS machine with the documented prerequisites and nothing else, `just vm-up` followed by `just vm-check` exits 0 without manual steps.
 - [ ] The kernel version inside the virtual machine is pinned, printed by `just vm-check`, and at least the minimum version the io_uring backend requires.
 - [ ] A test that opens a file with `O_DIRECT | O_DSYNC` on the virtual disk and writes one sector passes inside the virtual machine.
-- [ ] `just vm-check` runs the Io conformance suite (T0.3.2) and it passes. Until T0.3.2 exists this gate stays open and the card is not closed.
 - [ ] Destroying and recreating the virtual machine gives the same kernel and toolchain versions.
 
 ## T0.1.2 Write coding rules and determinism lints
@@ -101,16 +100,15 @@ Phase exit: an empty cluster of simulated shards exchanges checksummed messages 
 - A decision, with evidence, on whether hosted runners allow io_uring; if not, a documented alternative for the Linux-only jobs.
 - Branch protection: the checks are required for merging to main.
 
-**Not in this card.** The continuous simulator fleet (T2.3.4) and benchmark tracking (T1.5.5).
+**Not in this card.** The continuous simulator fleet (T2.3.4) and benchmark tracking (T1.5.5). The seed steps, the nightly seed run and the run-time gate are gates of T0.4.5, which adds the seed runner and with it most of the run time.
 
-**Depends on.** T0.1.1. The seed gate also needs T0.4.5.
+**Depends on.** T0.1.1.
 
 **Gates.**
-- [ ] The pull-request workflow finishes in under 15 minutes wall-clock at the 95th percentile over 20 consecutive runs. The run times are recorded.
 - [ ] Merging to main is impossible while a required check is failing or missing. Shown on a test pull request.
-- [ ] A pull request that breaks formatting, a lint, a test or a fixed seed fails the matching step (four injected bugs, four failing runs).
+- [ ] A pull request that breaks formatting, a lint or a test fails the matching step (three injected bugs, three failing runs).
 - [ ] A job that creates an io_uring instance and submits one read passes in CI on Linux, or the alternative is documented and that job passes there.
-- [ ] The fixed seed list is a file in the repository, and the nightly workflow runs at least 10,000 further seeds.
+- [ ] The fixed seed list is a file in the repository.
 - [ ] Third-party actions are pinned to a commit hash.
 
 ## T0.1.4 Constants and configuration module with compile-time validation
@@ -123,16 +121,16 @@ Phase exit: an empty cluster of simulated shards exchanges checksummed messages 
 - A split between format constants (fixed at cluster format, stored in the superblock) and process configuration (set at start).
 - A runtime check that compares the binary's format constants with a data file's.
 
-**Not in this card.** Tuning the values; they are initial values to benchmark in phase 1.
+**Not in this card.** Tuning the values; they are initial values to benchmark in phase 1. Checking the header struct's size against the constant is a gate of T0.2.2; refusing to open a data file is a gate of T1.1.2, which stores the format constants in the superblock.
 
 **Depends on.** T0.1.1.
 
 **Gates.**
 - [ ] No numeric limit of 256 or more from the design documents appears as a literal anywhere outside this module, and a grep-based test enforces it. Limits below 256 cannot be told apart from ordinary integers by a grep and are a review item.
-- [ ] Each of these fails to compile when violated (one test per rule, using a compile-fail test): message size is a multiple of the sector size; grid block size is a multiple of the sector size; the checkpoint interval is smaller than the WAL slot count minus the pipeline depth minus one compaction interval; the row size limit plus header fits in a message; the header is exactly 256 bytes.
+- [ ] Each of these fails to compile when violated (one test per rule, using a compile-fail test): message size is a multiple of the sector size; grid block size is a multiple of the sector size; the checkpoint interval is smaller than the WAL slot count minus the pipeline depth minus one compaction interval; the row size limit plus header fits in a message; the header size constant is exactly 256 bytes.
 - [ ] Every constant has a doc comment naming the document section it comes from.
 - [ ] A table generated from the module is compared in CI with the tables in the design documents, and a mismatch fails the check.
-- [ ] Opening a data file whose stored format constants differ from the binary's is refused with a typed error naming the constant.
+- [ ] Comparing a data file's stored format constants with the binary's returns a typed error naming the first constant that differs (test for each constant).
 
 ## T0.2.1 Benchmark and choose the 128-bit checksum
 
@@ -176,6 +174,7 @@ Phase exit: an empty cluster of simulated shards exchanges checksummed messages 
 - [ ] Flipping any single bit of a valid header, or of its body, is detected. Tested for every bit position of the header and 10,000 random body positions.
 - [ ] A header with a non-zero reserved byte, a size below 256, a size above the message limit, or an unknown command is rejected, each with its own error code (one test each).
 - [ ] The struct contains no `usize`, no pointers and no uninitialised padding. Checked by a derive that forbids padding.
+- [ ] The size assertion compares with `FORMAT.header_size` from `crates/base/src/constants.rs`, so a header struct of another size fails to compile (compile-fail test) (from T0.1.4).
 
 ## T0.2.3 Message pool and buffer management with fixed capacity
 
@@ -263,6 +262,7 @@ Phase exit: an empty cluster of simulated shards exchanges checksummed messages 
 - [ ] 1,000,000 mixed operations run with zero heap allocations after startup (counting allocator).
 - [ ] A write that has completed is readable after the process is killed with `SIGKILL` and restarted (test with 1,000 iterations).
 - [ ] The minimum supported kernel version is stated in the documentation and checked at startup with a clear error.
+- [ ] `just vm-check` runs the conformance suite and it passes, and `min_kernel` in `tools/vm/check.sh` equals the minimum stated here (from T0.1.6).
 
 ## T0.3.3 io_uring backend: TCP accept, connect, send, recv
 
@@ -461,3 +461,7 @@ Phase exit: an empty cluster of simulated shards exchanges checksummed messages 
 - [ ] A panic, an assertion failure and a detected hang (no progress in virtual time) are each reported as a failure with a reproduction command (three tests).
 - [ ] The swarm configuration of a seed is printed with the failure and is a function of the seed only.
 - [ ] `just sim` with no arguments runs the fixed seed list used by CI.
+- [ ] `just sim` runs the fixed seed list `crates/sim/ci-seeds.txt` and `just sim-range FIRST COUNT` runs a range; the seed step of `.github/workflows/ci.yml` and the nightly workflow call them, and their warning guards are removed (from T0.1.3).
+- [ ] A pull request that breaks a fixed seed fails the seed step of CI (injected bug) (from T0.1.3).
+- [ ] The nightly workflow runs at least 10,000 further seeds (from T0.1.3).
+- [ ] The pull-request workflow finishes in under 15 minutes wall-clock at the 95th percentile over 20 consecutive runs with the seed step running. The run times are recorded (from T0.1.3).

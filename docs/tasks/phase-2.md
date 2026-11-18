@@ -127,7 +127,7 @@ Design reference for the whole phase: `docs/02-replication.md`. "Invariant N" be
 **Work.**
 - request_headers and headers to repair the header chain.
 - request_prepare by (op, checksum), answered by any replica that has it.
-- nack_prepare from a replica that never had the prepare.
+- nack_prepare from a replica that certainly never acknowledged the prepare (document 02 section 2); a replica whose slot is corrupt never nacks.
 - Repair driven by the hash chain: the replica always knows the checksum it needs.
 - Repair work in its own scheduling class, bounded in rate.
 

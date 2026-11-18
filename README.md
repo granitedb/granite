@@ -10,7 +10,7 @@ A strict, deterministic, replicated database for append-heavy transactional work
 - **Typed and strict:** schema-defined tables, no implicit casts, no silent overflow, every size bounded.
 - **Append-first:** tables are declared `immutable` (event logs) or `versioned`; nothing is overwritten in place.
 - **One-shot transactions** over a typed binary protocol, including serializable transactions across shards.
-- **Columnar where it helps:** per-table layout (`row`, `columnar` or column groups) in one storage engine.
+- **Row, columnar or mixed layout per table:** each table declares how its columns are grouped on disk, in one storage engine.
 - **Analytics** through a separate read-only SQL gateway, at a consistent snapshot.
 - **Tested by deterministic simulation** with fault injection as the primary method.
 

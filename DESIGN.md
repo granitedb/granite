@@ -1,6 +1,6 @@
 # Granite: design overview
 
-A columnar OLTP database in Rust. Status: draft 3, reviewed document by document, 2026-11-18. "The database" in these documents means Granite.
+A transactional database with per-table row or columnar layout, in Rust. Status: draft 3, reviewed document by document, 2026-11-18. "The database" in these documents means Granite.
 
 This file is the entry point. Details live in `docs/`:
 

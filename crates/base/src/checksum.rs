@@ -305,6 +305,7 @@ fn long(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::constants::FORMAT;
 
     /// The input of the vectors: byte `i` is `i * 31 + 7`, truncated.
     fn pattern(len: usize) -> Vec<u8> {
@@ -380,6 +381,32 @@ mod tests {
         for f in [checksum, checksum_scalar] {
             let fold = (0..=input.len()).fold(0u128, |acc, n| acc.wrapping_mul(3) ^ f(&input[..n]));
             assert_eq!(fold, 0x48972a2beac8180e_b2c128dcb27c25cd);
+        }
+    }
+
+    /// The faults of document 01 section 1 that a checksum must catch by
+    /// itself: every single-bit flip of a header and of a sector, and a block
+    /// torn at every sector boundary (new sectors, then old ones). The third,
+    /// misdirection, is caught because the address is among the checksummed
+    /// bytes, which is the format's job, not the function's.
+    #[test]
+    fn detects_bit_flips_and_torn_writes() {
+        for size in [FORMAT.header_size, FORMAT.sector_size] {
+            let mut data = pattern(size as usize);
+            let mut seen = std::collections::BTreeSet::from([checksum(&data)]);
+            for bit in 0..data.len() * 8 {
+                data[bit / 8] ^= 1 << (bit % 8);
+                assert!(seen.insert(checksum(&data)), "size {size}, bit {bit}");
+                data[bit / 8] ^= 1 << (bit % 8);
+            }
+        }
+        let (block, sector) = (FORMAT.grid_block_size as usize, FORMAT.sector_size as usize);
+        let new = pattern(block);
+        let old: Vec<u8> = new.iter().map(|b| !b).collect();
+        for tear in (sector..block).step_by(sector) {
+            let torn = [&new[..tear], &old[tear..]].concat();
+            assert_ne!(checksum(&torn), checksum(&new), "torn at {tear}");
+            assert_ne!(checksum(&torn), checksum(&old), "torn at {tear}");
         }
     }
 

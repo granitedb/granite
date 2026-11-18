@@ -8,7 +8,7 @@ default:
     @just --list --unsorted
 
 # Everything CI checks: formatting, lints, tests, the API docs, and the gateway build.
-check: fmt-check lint test doc gateway
+check: fmt-check lint test doc gateway roadmap-plan
 
 # Build every crate in the workspace.
 build:
@@ -44,6 +44,6 @@ run *args:
 doc:
     cargo doc --workspace --no-deps --locked
 
-# Parse the roadmap and print a summary of the issues it describes.
+# Check that every roadmap task has a complete specification, and print a summary.
 roadmap-plan:
     python3 tools/roadmap_issues.py plan

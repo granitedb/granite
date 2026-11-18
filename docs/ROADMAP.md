@@ -399,9 +399,9 @@ Exit: analytical queries over a consistent snapshot across shards, with a measur
 
 ## Turning this into GitHub cards
 
-Proposed mapping when we are ready:
+Mapping:
 - One GitHub Project board with columns Backlog, Ready, In progress, Review, Done.
 - One milestone per phase.
-- One parent issue per epic with a task list; one issue per task with the "Done when" text as acceptance criteria.
+- One parent issue per epic with a task list; one issue per task. The "Done when" column here is a one-line summary. The full specification and the strict gates of every task are in [tasks/](tasks/README.md), and that text is what the issue shows.
 - Labels: `track:A` to `track:D`, `phase:0` to `phase:7`, `kind:spec`, `kind:impl`, `kind:test`, `kind:bench`, `gate`.
-- Only phases 0 to 2 get individual task issues at first; later phases stay as epics until their specifications are written, because their tasks will change.
+- Every task has an issue. Later phases will change as earlier ones teach us things; a change is made in `tasks/` and published with `tools/roadmap_issues.py update`.

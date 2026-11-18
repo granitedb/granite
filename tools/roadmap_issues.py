@@ -3,9 +3,13 @@
 
   roadmap_issues.py plan                  parse and print a summary (no network)
   roadmap_issues.py create OWNER/REPO     create everything with the gh CLI
+  roadmap_issues.py update OWNER/REPO     rewrite the body and labels of existing task issues
+
+docs/ROADMAP.md is the index (order, tracks, one-line summary). The full text of
+each task comes from its section in docs/tasks/phase-*.md.
 
 `create` is resumable: it records what it made in tools/.roadmap_state.json and
-skips anything already there.
+skips anything already there or already on GitHub under the same title.
 """
 import json
 import re
@@ -17,6 +21,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 ROADMAP = ROOT / "docs" / "ROADMAP.md"
 STATE = ROOT / "tools" / ".roadmap_state.json"
+TASKS_DIR = ROOT / "docs" / "tasks"
 
 TRACK_NAMES = {
     "A": "storage",
@@ -62,6 +67,25 @@ def parse():
     return phases, epics, tasks
 
 
+def parse_specs():
+    """Return ({task id: (title, body)}, standard gates text) from docs/tasks."""
+    specs = {}
+    for path in sorted(TASKS_DIR.glob("phase-*.md")):
+        tid = title = None
+        body = []
+        for line in path.read_text().splitlines() + ["## end"]:
+            if line.startswith("## "):
+                if tid:
+                    specs[tid] = (title, "\n".join(body).strip())
+                m = re.match(r"^## (T\d+\.\d+\.\d+) (.+)$", line)
+                tid, title, body = (m.group(1), m.group(2).strip(), []) if m else (None, None, [])
+            elif tid:
+                body.append(line)
+    readme = (TASKS_DIR / "README.md").read_text()
+    standard = readme.split("<!-- standard:begin -->")[1].split("<!-- standard:end -->")[0].strip()
+    return specs, standard
+
+
 def milestone_name(phases, epic_id):
     phase = epic_id[1:].split(".")[0]
     title = phases[phase]["title"]
@@ -72,35 +96,61 @@ def milestone_name(phases, epic_id):
 
 def task_kind(task):
     text = (task["title"] + " " + task["done"]).lower()
-    if "model-check" in text or "annotate" in text or "specification" in text:
+    # Whole words only: "report" must not match "reporting" or "reported".
+    def has(*words):
+        return re.search(r"\b(" + "|".join(words) + r")\b", text) is not None
+
+    if has("model-check", "annotate", "specification"):
         return "kind:spec"
-    if "benchmark" in text or "experiment" in text or "report" in text:
+    if has("benchmark", "experiment", "report"):
         return "kind:bench"
-    if "checker" in text or "simulator" in text or "fuzz" in text:
+    if has("checker", "simulator", "fuzz", "fuzzed", "fuzzer"):
         return "kind:test"
     return "kind:impl"
 
 
 def task_labels(task):
     labels = [f"phase:{task['phase']}", task_kind(task)]
-    for t in task["tracks"]:
+    # A task owned by "all" belongs to every track.
+    tracks = TRACK_NAMES if "all" in task["tracks"] else task["tracks"]
+    for t in tracks:
         if t in TRACK_NAMES:
             labels.append(f"track:{t}")
-    if re.search(r"\bG[123]\b", task["title"] + task["done"]):
+    if re.search(r"\bG[123]\b", task["title"] + " " + task["done"]):
         labels.append("gate")
     return labels
 
 
-def task_body(task, epic):
+def task_body(task, epic, specs, standard):
     tracks = ", ".join(f"{t} ({TRACK_NAMES[t]})" if t in TRACK_NAMES else t for t in task["tracks"])
+    spec = specs[task["id"]][1]
     return (
         f"**Epic:** {epic['id']} {epic['title']}\n"
-        f"**Track:** {tracks}\n\n"
-        f"## Done when\n\n{task['done']}\n\n"
-        f"## References\n\n"
-        f"- Roadmap: `docs/ROADMAP.md` ({task['id']})\n"
-        f"- Design: `DESIGN.md` and the documents under `docs/`\n"
+        f"**Track:** {tracks}\n"
+        f"**Summary:** {task['done']}\n\n"
+        f"{spec}\n\n"
+        f"{standard}\n\n"
+        f"## Source\n\n"
+        f"This text is generated from `docs/tasks/phase-{task['phase']}.md` ({task['id']}). "
+        f"Change it there, not here.\n"
     )
+
+
+def spec_problems(tasks, specs):
+    problems = [f"{t['id']}: no section in docs/tasks" for t in tasks if t["id"] not in specs]
+    problems += [f"{i}: section has no task in the roadmap" for i in specs if i not in {t["id"] for t in tasks}]
+    for t in tasks:
+        if t["id"] not in specs:
+            continue
+        title, body = specs[t["id"]]
+        if title != t["title"]:
+            problems.append(f"{t['id']}: title differs from the roadmap")
+        for part in ("**Goal.**", "**Work.**", "**Not in this card.**", "**Depends on.**", "**Gates.**"):
+            if part not in body:
+                problems.append(f"{t['id']}: missing {part}")
+        if body.count("- [ ]") < 4:
+            problems.append(f"{t['id']}: fewer than 4 gates")
+    return problems
 
 
 def plan():
@@ -122,6 +172,12 @@ def plan():
     for t in tasks:
         kinds[task_kind(t)] = kinds.get(task_kind(t), 0) + 1
     print("kinds:", kinds)
+    specs, _ = parse_specs()
+    problems = spec_problems(tasks, specs)
+    gates = sum(body.count("- [ ]") for _, body in specs.values())
+    print(f"task specifications: {len(specs)}  gates: {gates}")
+    print("specification problems:", problems or "none")
+    return not problems
 
 
 def gh(*args, input_text=None):
@@ -138,6 +194,9 @@ def gh(*args, input_text=None):
 
 def create(repo):
     phases, epics, tasks = parse()
+    specs, standard = parse_specs()
+    if spec_problems(tasks, specs):
+        raise SystemExit("task specifications are incomplete; run `plan`")
     state = json.loads(STATE.read_text()) if STATE.exists() else {}
     state.setdefault("labels", []), state.setdefault("milestones", {}), state.setdefault("issues", {})
 
@@ -164,9 +223,17 @@ def create(repo):
 
     epic_by_id = {e["id"]: e for e in epics}
 
+    # Issues already on GitHub, by title, so a lost state file cannot cause duplicates.
+    listed = gh("issue", "list", "--repo", repo, "--state", "all", "--limit", "1000", "--json", "number,title")
+    existing = {i["title"]: i["number"] for i in json.loads(listed or "[]")}
+
     def make_issue(key, title, body, label_list, milestone):
         if key in state["issues"]:
             return state["issues"][key]
+        if title in existing:
+            state["issues"][key] = existing[title]
+            save()
+            return existing[title]
         args = ["issue", "create", "--repo", repo, "--title", title, "--body-file", "-", "--milestone", milestone]
         for l in label_list:
             args += ["--label", l]
@@ -179,7 +246,8 @@ def create(repo):
 
     for t in tasks:
         epic = epic_by_id[t["epic"]]
-        make_issue(t["id"], f"{t['id']} {t['title']}", task_body(t, epic), task_labels(t), milestone_name(phases, epic["id"]))
+        body = task_body(t, epic, specs, standard)
+        make_issue(t["id"], f"{t['id']} {t['title']}", body, task_labels(t), milestone_name(phases, epic["id"]))
 
     for e in epics:
         children = [t for t in tasks if t["epic"] == e["id"]]
@@ -195,9 +263,32 @@ def create(repo):
     print(f"done: {len(state['issues'])} issues in {repo}")
 
 
+def update(repo):
+    phases, epics, tasks = parse()
+    specs, standard = parse_specs()
+    if spec_problems(tasks, specs):
+        raise SystemExit("task specifications are incomplete; run `plan`")
+    state = json.loads(STATE.read_text())
+    epic_by_id = {e["id"]: e for e in epics}
+    kinds = ["kind:spec", "kind:impl", "kind:test", "kind:bench"]
+    for t in tasks:
+        number = str(state["issues"][t["id"]])
+        labels = task_labels(t)
+        stale = [k for k in kinds if k not in labels]
+        gh(
+            "issue", "edit", number, "--repo", repo, "--body-file", "-",
+            "--add-label", ",".join(labels), "--remove-label", ",".join(stale),
+            input_text=task_body(t, epic_by_id[t["epic"]], specs, standard),
+        )
+        time.sleep(1)
+    print(f"done: {len(tasks)} task issues updated in {repo}")
+
+
 if __name__ == "__main__":
     if len(sys.argv) >= 2 and sys.argv[1] == "plan":
-        plan()
+        sys.exit(0 if plan() else 1)
+    elif len(sys.argv) == 3 and sys.argv[1] == "update":
+        update(sys.argv[2])
     elif len(sys.argv) == 3 and sys.argv[1] == "create":
         create(sys.argv[2])
     else:

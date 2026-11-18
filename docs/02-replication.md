@@ -2,7 +2,7 @@
 
 Each group is an independent Viewstamped Replication cluster of RF replicas (3 or 5, optionally 6 with flexible quorums), plus optional standbys. This document covers one group. Multi-group concerns are in document 04.
 
-Basis: Liskov and Cowling, "Viewstamped Replication Revisited" (2012), with the changes TigerBeetle made for storage faults. Verify every rule here against the paper and against TigerBeetle's published protocol description before coding.
+Basis: Liskov and Cowling, "Viewstamped Replication Revisited" (2012), with the changes TigerBeetle made for storage faults. Every rule here has been checked against the paper, against Alagappan et al., "Protocol-Aware Recovery for Consensus-Based Storage" (FAST 2018), and against TigerBeetle's published protocol description; the source of each rule, every deviation and every source rule we do not adopt are in [02a-replication-sources.md](02a-replication-sources.md).
 
 ## 0. Deployment assumptions (confirmed 2026-11-17)
 
@@ -24,7 +24,7 @@ Basis: Liskov and Cowling, "Viewstamped Replication Revisited" (2012), with the 
 | Client discovers the new primary | client retry timeout 50 ms, then broadcast to all replicas; replicas also push a view hint |
 
 What makes this safe rather than twitchy:
-- **Quorum-gated suspicion.** A backup that times out sends start_view_change as a vote but stays in the current view. A replica changes status only after a view-change quorum of votes for the same view. One slow or partitioned backup cannot depose a healthy primary. (This differs from the letter of VR Revisited; include it in the model-checked specification.)
+- **Quorum-gated suspicion.** A backup that times out sends start_view_change as a vote but stays in the current view. A replica changes status only after a view-change quorum of votes for the same view. One slow or partitioned backup cannot depose a healthy primary. (This differs from the letter of VR Revisited, section 4.2, and matches TigerBeetle's start-view-change protocol; include it in the model-checked specification.)
 - **Event-loop stall bound.** No task on a shard thread may run longer than 1 ms without yielding; the loop's p99.9 iteration time must stay under 5 ms. Compaction, scans, bulk ingest and checkpoint writes are all sliced to this budget. This is measured in production and asserted in benchmarks, because a stalled primary looks exactly like a dead one.
 - **Correlated failover.** A node failure triggers view changes in every group with a replica there, at once. The jitter is derived from (group, replica) so they do not synchronise.
 
@@ -35,13 +35,13 @@ What makes this safe rather than twitchy:
 - Persistent state: superblock (view, log_view, checkpoint), WAL, grid.
 - Volatile state: op (highest prepared), commit_min (highest executed), commit_max (highest known committed), the pipeline of in-flight prepares.
 
-Quorums (flexible): replication quorum Qr and view-change quorum Qv with Qr + Qv > N.
+Quorums (flexible): replication quorum Qr and view-change quorum Qv with Qr + Qv > N, and Qv a majority (Qv > N / 2) so that any two view-change quorums intersect. The nack quorum, the number of replicas that must each prove they never acknowledged a prepare before it may be truncated (section 4), is Qn = N - Qr + 1: then the replicas that could have acknowledged it number at most Qr - 1, too few to have committed it.
 
-| Replicas | Replication quorum | View-change quorum |
-|---|---|---|
-| 3 | 2 | 2 |
-| 5 | 3 | 3 |
-| 6 | 3 | 4 |
+| Replicas | Replication quorum | View-change quorum | Nack quorum |
+|---|---|---|---|
+| 3 | 2 | 2 | 2 |
+| 5 | 3 | 3 | 3 |
+| 6 | 3 | 4 | 4 |
 
 ## 2. Messages
 
@@ -50,7 +50,7 @@ All messages share a 256-byte header (document 05) and are checksummed.
 | Message | Direction | Purpose |
 |---|---|---|
 | request | client -> primary | A batch of events for one operation type |
-| prepare | primary -> backups | Header (op, view, parent checksum, timestamp, client, request) plus body |
+| prepare | primary -> backups | Header (op, view, commit, parent checksum, timestamp, client, request) plus body |
 | prepare_ok | backup -> primary | Durable acknowledgement of one prepare |
 | commit | primary -> backups | Heartbeat carrying commit_max |
 | reply | primary -> client | Result of a request |
@@ -60,7 +60,7 @@ All messages share a 256-byte header (document 05) and are checksummed.
 | request_start_view | replica -> primary | Ask for start_view after falling behind |
 | request_headers, headers | any | Repair of the header chain |
 | request_prepare | any | Repair of a missing or corrupt prepare by (op, checksum) |
-| nack_prepare | any | "I never had this prepare" – lets a new primary truncate safely |
+| nack_prepare | any | "I certainly never acknowledged this prepare": the sender has no prepare at that op and its slot is not faulty, holds a different prepare there, or holds this one but has not made it durable. A replica whose slot is corrupt never nacks. Lets a new primary truncate safely |
 | request_block, block | any | Grid repair by (address, checksum) |
 | ping, pong | any | Liveness and clock samples |
 | request_sync_checkpoint, sync_checkpoint | any | State sync |
@@ -82,12 +82,12 @@ Execution is strictly sequential and deterministic. The state machine receives (
 
 ## 4. View change
 
-Triggered when a backup hears nothing from the primary for a timeout, or sees a higher view.
+Triggered when a backup hears nothing from the primary for a timeout (suspicion, step 1), or when a replica receives a do_view_change or start_view for a higher view, each of which implies a view-change quorum has already left the old view. A prepare or commit from a higher view makes the replica ask for that view with request_start_view. A start_view_change for a higher view on its own moves no replica (quorum-gated suspicion, section 0).
 
-1. Replica increments view, sets status view_change, sends start_view_change.
-2. On Qv start_view_change messages for the view, each replica sends do_view_change to the new primary with its log_view, op, commit and the headers of its log suffix.
+1. A backup that suspects the primary sends start_view_change for view + 1 to all replicas as a vote, and keeps its view and status: it still accepts the current view's prepares and commits. It repeats the vote while the suspicion lasts and stops when it hears from the primary again. A replica in status view_change whose view change does not complete in time votes for the next view in the same way.
+2. A replica that holds Qv start_view_change votes for the same view (its own included) increments its view, sets status view_change and stops accepting prepares from the old view. It makes view and log_view durable in the superblock, then sends do_view_change to the new primary with its log_view, op, commit and the headers of its log suffix.
 3. The new primary, on Qv do_view_change messages, selects the log from the replica with the highest (log_view, op), installs those headers, and repairs any prepares it lacks.
-4. Uncommitted ops in the suffix may or may not have been committed by the old primary. An op is kept unless the new primary collects enough nack_prepare messages to prove no replication quorum could have held it; then it is truncated. An op whose prepare is corrupt everywhere but might have committed blocks the view change rather than risking data loss.
+4. Uncommitted ops in the suffix may or may not have been committed by the old primary. An op is kept unless the new primary collects a nack quorum (section 1) of nack_prepare messages for it, which proves no replication quorum could have acknowledged it; then it and every later op are truncated. An op whose prepare is corrupt everywhere but might have committed blocks the view change rather than risking data loss.
 5. The new primary sends start_view, re-replicates the uncommitted suffix, and resumes.
 
 Timeouts use deterministic exponential backoff with per-replica jitter derived from the replica index, so the simulator can reproduce them.
@@ -97,12 +97,12 @@ Timeouts use deterministic exponential backoff with per-replica jitter derived f
 - **WAL repair:** a replica with a missing or corrupt prepare requests it by (op, checksum) from any peer. The hash chain tells it exactly which checksum to expect.
 - **Recovery after crash:** load superblock, classify WAL slots (document 01), replay from checkpoint. If the head of the WAL is uncertain, enter `recovering_head` and learn the true head from a start_view before participating. A replica never votes on the basis of a log it cannot verify.
 - **Grid repair:** request blocks by (address, checksum). A replica also scrubs its grid in the background at a fixed pace and repairs what it finds.
-- **State sync:** a replica that is more than one checkpoint behind (the WAL ring has wrapped) cannot catch up by replaying. It fetches the latest checkpoint's superblock roots from a quorum-confirmed peer, adopts them, and then repairs every grid block it lacks, lazily and by scrubbing. It becomes a normal backup once the checkpoint's manifest is complete.
+- **State sync:** a replica that is more than one checkpoint behind (the WAL ring has wrapped) cannot catch up by replaying. It fetches the latest durable checkpoint's superblock roots from a peer, adopts them, and then repairs every grid block it lacks, lazily and by scrubbing. It becomes a normal backup once the checkpoint's manifest is complete. A checkpoint is durable once a replication quorum holds it, which a replica learns from commit_max being far enough past that checkpoint (replicas acknowledge prepares beyond a checkpoint only once they hold it); one peer alone claiming a newer checkpoint is never enough, because that peer's state could be corrupt.
 
 ## 6. Clocks and timestamps
 
 - Clock sampling is a node-level service: one sampler per node pair, shared read-only by all shards on the node, rather than every shard measuring separately. This is safe for determinism because only the primary reads the clock, and the value it picks travels inside the prepare.
-- Nodes exchange ping/pong with monotonic and wall-clock samples. Each replica computes, with Marzullo's algorithm, the interval of wall-clock offsets that agrees with a quorum. A primary whose own clock is outside that interval does not assign timestamps and steps down.
+- Nodes exchange ping/pong with monotonic and wall-clock samples. Each replica computes, with Marzullo's algorithm, the interval of wall-clock offsets that agrees with a replication quorum of clocks. A primary whose own clock is outside that interval does not assign timestamps and steps down.
 - The primary assigns each prepare a timestamp `max(previous prepare timestamp + previous batch size, synchronised clock, hybrid-clock floor)`. Each event in the batch gets a distinct, strictly increasing timestamp below the prepare timestamp range's end.
 - The hybrid-clock floor is raised by timestamps received from clients and other groups (document 04).
 - Timestamps are u64 nanoseconds. They are the version numbers of versioned tables and the `_ts` of every row, so they are unique within a group and strictly increasing with op order.
@@ -115,6 +115,7 @@ Revised for hundreds to thousands of client processes.
 - **Sessions cover writes only.** Reads are idempotent, never enter the log (section 8) and need no session, so read concurrency per client is unlimited.
 - Each session has one write request in flight, numbered consecutively. The session table is an internal LSM tree (replicated state) keyed by client id, storing the last request number and the last reply. Write replies are sparse result lists and usually tiny; they are stored inline up to 4 KiB and in referenced grid blocks above that. There is no separate client-replies zone.
 - A duplicate of the last request returns the stored reply. An older request number is dropped. This gives exactly-once execution across retries and view changes.
+- A session entry changes only when its request executes (commits), never when it is prepared: an uncommitted request may not survive a view change, and a table updated at prepare would then lock the client out. VR Revisited section 4.1 updates the table at prepare; TigerBeetle found this to be a liveness bug.
 - Capacity: 16,384 sessions per group initially. When full, the least recently used session is evicted deterministically (by last request op) and that client re-registers on its next write.
 - A client that needs concurrent writes to the same group opens several sessions.
 

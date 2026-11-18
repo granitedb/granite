@@ -1,0 +1,46 @@
+# Lima template for the project's Linux VM (io_uring and direct I/O work on macOS).
+# Created and removed by `just vm-up` / `just vm-down`; see docs/linux-vm.md.
+minimumLimaVersion: 2.0.0
+vmType: vz
+mountType: virtiofs
+
+# The image is pinned by URL and digest, which pins the kernel. When changing it,
+# update pinned_kernel in tools/vm/check.sh to match.
+images:
+- location: "https://cloud-images.ubuntu.com/releases/noble/release-20260321/ubuntu-24.04-server-cloudimg-arm64.img"
+  arch: aarch64
+  digest: "sha256:1ea801e659d2f5035ac294e0faab0aac9b6ba66753df933ba5c7beab0c689bd0"
+- location: "https://cloud-images.ubuntu.com/releases/noble/release-20260321/ubuntu-24.04-server-cloudimg-amd64.img"
+  arch: x86_64
+  digest: "sha256:5c3ddb00f60bc455dac0862fabe9d8bacec46c33ac1751143c5c3683404b110d"
+
+cpus: 4
+memory: 8GiB
+# Only the repository is shared; tools/vm/vm.sh adds it at the same path as on the host.
+mounts: []
+containerd:
+  system: false
+  user: false
+
+# Direct I/O tests use this disk (ext4, mounted at /mnt/lima-granite-data): on the shared
+# folder O_DIRECT reaches a host file through FUSE, not a block device. vm.sh creates it.
+additionalDisks:
+- name: granite-data
+  format: true
+  fsType: ext4
+
+provision:
+- mode: system
+  script: |
+    #!/bin/bash
+    set -eux -o pipefail
+    # Keep the pinned kernel: no background upgrades, kernel packages held.
+    systemctl disable --now apt-daily.timer apt-daily-upgrade.timer unattended-upgrades.service
+    apt-mark hold $(dpkg-query -W -f '${Package}\n' 'linux-image-*')
+    # Linux builds must not share target/ with the host's builds in the mounted repository.
+    echo 'export CARGO_TARGET_DIR=/var/tmp/granite-target' > /etc/profile.d/granite-cargo.sh
+    # Lima runs this on every boot; install only on the first.
+    dpkg -s build-essential ca-certificates just rustup strace > /dev/null 2>&1 && exit 0
+    apt-get update
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      build-essential ca-certificates just rustup strace

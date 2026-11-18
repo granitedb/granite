@@ -51,3 +51,19 @@ doc:
 # Check that every roadmap task has a complete specification, and print a summary.
 roadmap-plan:
     python3 tools/roadmap_issues.py plan
+
+# Create and start the Linux VM for io_uring and direct I/O work (docs/linux-vm.md).
+vm-up:
+    tools/vm/vm.sh up
+
+# Inside the VM: check the kernel and toolchain, and write one sector with O_DIRECT | O_DSYNC.
+vm-check:
+    tools/vm/vm.sh check
+
+# Open a shell inside the VM, in the repository.
+vm-shell:
+    tools/vm/vm.sh shell
+
+# Delete the VM and its data disk.
+vm-down:
+    tools/vm/vm.sh down

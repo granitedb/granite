@@ -78,7 +78,8 @@ fn accumulate_avx2(acc: &mut Acc, input: &[u8], secret: &[u8]) {
                 // low 32 bits times high 32 bits of each lane
                 let product = _mm256_mul_epu32(data_key, _mm256_srli_epi64::<32>(data_key));
                 // swap the 64-bit lanes of each 128-bit half: acc[lane ^ 1] += data
-                let swapped = _mm256_shuffle_epi32::<0b01_00_11_10>(data);
+                // (0b0100_1110 is _MM_SHUFFLE(1, 0, 3, 2))
+                let swapped = _mm256_shuffle_epi32::<0b0100_1110>(data);
                 *a = _mm256_add_epi64(product, _mm256_add_epi64(*a, swapped));
             }
         }

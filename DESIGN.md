@@ -78,7 +78,7 @@ Non-goals:
 | Consistent reads | Each shard waits for its own safe timestamp; no cluster-wide value, no metadata dependency | confirmed |
 | Sharding | 64-bit token ranges (tablets, target 16 GiB) with an explicit epoch-versioned map | proposed |
 | Tablet movement | Immutable parts shipped as blocks by checksum; only the recent tail goes through the target's log | proposed |
-| Checksum | XXH3-128 for every on-disk and wire checksum ([decision 0002](docs/decisions/0002-checksum.md)); confirmed by the x86-64 benchmark report | proposed |
+| Checksum | XXH3-128 for every on-disk and wire checksum ([decision 0002](docs/decisions/0002-checksum.md)); to be confirmed by the x86-64 report (T0.2.1) | proposed |
 
 ## 3. Architecture at a glance
 

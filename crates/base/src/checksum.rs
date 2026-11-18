@@ -31,11 +31,8 @@ pub fn checksum(bytes: &[u8]) -> u128 {
 }
 
 /// The same function without SIMD kernels: the reference the kernels are
-/// tested against, and what a machine without SIMD runs.
-#[cfg_attr(
-    target_arch = "aarch64",
-    allow(dead_code, reason = "aarch64 always has NEON; the tests use it")
-)]
+/// tested and benchmarked against.
+#[cfg(test)]
 fn checksum_scalar(bytes: &[u8]) -> u128 {
     if bytes.len() <= MIDSIZE_MAX {
         short(bytes)
@@ -222,7 +219,12 @@ fn short(input: &[u8]) -> u128 {
     }
 }
 
-/// The long path with the scalar kernels.
+/// The long path with the scalar kernels, for x86-64 without AVX2 and
+/// for the tests.
+#[cfg_attr(
+    target_arch = "aarch64",
+    allow(dead_code, reason = "aarch64 always has NEON; the tests use it")
+)]
 fn long_scalar(input: &[u8]) -> u128 {
     long(input, accumulate_scalar, scramble_scalar)
 }

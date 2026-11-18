@@ -28,7 +28,7 @@ Encryption at rest is delegated to the operating system or volume (LUKS, encrypt
 
 Client sessions and their last replies live in an internal LSM tree, not a dedicated zone.
 
-Initial constants. They are format constants: stored in the superblock, and a data file whose stored values differ from the binary's is refused. Their home is `crates/base/src/constants.rs`; a test compares this table with it.
+Initial constants, to be tuned by benchmark in phase 1. They are format constants: stored in the superblock, and a data file whose stored values differ from the binary's is refused. Their home is `crates/base/src/constants.rs`; a test compares this table with it.
 
 | Constant | Value |
 |---|---|

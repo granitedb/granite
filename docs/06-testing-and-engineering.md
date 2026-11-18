@@ -17,7 +17,7 @@ Can, on any laptop including macOS on ARM:
 - relative comparisons (layout A against layout B on the same machine).
 
 Cannot:
-- anything about the io_uring backend or direct I/O behaviour, which are Linux-only. These run in CI on Linux and in a local Linux virtual machine. Whether hosted CI runners permit io_uring inside containers must be checked when CI is set up (T0.1.3); if not, those jobs run directly on the runner's host.
+- anything about the io_uring backend or direct I/O behaviour, which are Linux-only. These run in CI on Linux and in a local Linux virtual machine. They run directly on the hosted runner, never in a container; the `io-uring` CI job checks that the runner allows io_uring, and [decisions/0001](decisions/0001-io-uring-on-hosted-runners.md) records the result and the alternative if it does not.
 - absolute throughput and latency, write amplification on real drives, the 200 ms failover bound, the 1 ms slice rule under real load, power-fail behaviour.
 
 Since development machines may be ARM while production is x86-64, every SIMD kernel has a scalar reference implementation that runs everywhere, and CI on x86-64 checks that the two produce identical bytes.
@@ -202,5 +202,8 @@ With three engineers, track D is split between A and B and the schedule stretche
 
 - Monorepo, one Cargo workspace, pinned toolchain, `deny.toml` for dependencies.
 - CI on every change: build, unit and property tests, a fixed set of simulator seeds, lints, format. Nightly: long simulator runs, fuzzing, benchmarks.
+  - `.github/workflows/ci.yml` runs on every pull request and push to main, on Linux x86-64 and macOS: each recipe of `just check` as its own step, then `just sim`, which runs the fixed seed list `crates/sim/ci-seeds.txt`. A seed that once failed is appended to that list. The `io-uring` job checks that the Linux runner allows io_uring (see section 0).
+  - `.github/workflows/nightly.yml` runs `just sim-range FIRST COUNT` on 10,000 seeds, starting at the run number times 10,000, so each night covers new seeds. The log prints the range and the commit.
+  - The jobs of `ci.yml` are required checks for merging to main. Third-party actions are pinned to a commit hash.
 - Design changes go through short written proposals in `docs/`, updated in the same change as the code.
 - On-disk and wire formats are versioned from the first commit, even before any compatibility promise.

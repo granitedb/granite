@@ -203,6 +203,7 @@ With three engineers, track D is split between A and B and the schedule stretche
 - Monorepo, one Cargo workspace, pinned toolchain, `deny.toml` for dependencies.
 - CI on every change: build, unit and property tests, a fixed set of simulator seeds, lints, format. Nightly: long simulator runs, fuzzing, benchmarks.
   - `.github/workflows/ci.yml` runs on every pull request and push to main, on Linux x86-64 and macOS: each recipe of `just check` as its own step, then `just sim`, which runs the fixed seed list `crates/sim/ci-seeds.txt`. A seed that once failed is appended to that list. The `io-uring` job checks that the Linux runner allows io_uring (see section 0).
+  - `just sim` and `just sim-range` arrive with the seed runner (T0.4.5). Until then the seed steps of both workflows only print a warning and run no seeds.
   - `.github/workflows/nightly.yml` runs `just sim-range FIRST COUNT` on 10,000 seeds, starting at the run number times 10,000, so each night covers new seeds. The log prints the range and the commit.
   - The jobs of `ci.yml` are required checks for merging to main. Third-party actions are pinned to a commit hash.
 - Design changes go through short written proposals in `docs/`, updated in the same change as the code.

@@ -1,6 +1,6 @@
 # 0001. io_uring on hosted CI runners
 
-Status: proposed. The evidence below is filled in from the first run of the `io-uring` job; the decision is confirmed or replaced then.
+Status: accepted on 2026-11-18, from the first run of the `io-uring` job (evidence below).
 
 ## Question
 
@@ -24,14 +24,14 @@ If step 2 fails, hosted runners are not usable for these jobs, and the alternati
 
 ## Evidence
 
-To be filled in from the first run (paste the lines, keep the link):
+From the first run:
 
 | Item | Value |
 |---|---|
-| Run | (link to the Actions run) |
-| Commit | |
-| Runner image | (from "Set up job": image name and version) |
-| Kernel (`uname -a`) | |
-| `kernel.io_uring_disabled` | |
-| Read on the runner | pass / fail, with the fio `issued rwts` line or the error |
-| Read inside a container | pass / fail, with the fio `issued rwts` line or the error |
+| Run | <https://github.com/granitedb/granite/actions/runs/44299680996>, job `io-uring` |
+| Commit | a8b14817499901f1d7e051616ce84e60aa3c03f3 |
+| Runner image | `ubuntu-24.04`, version 20261111.370.1 |
+| Kernel (`uname -a`) | `Linux 7.0.0-1017-azure #17~24.04.1-Ubuntu SMP PREEMPT x86_64` |
+| `kernel.io_uring_disabled` | 0 |
+| Read on the runner | pass: fio-3.36, `err= 0`, `issued rwts: total=1,0,0,0 short=0,0,0,0 dropped=0,0,0,0` |
+| Read inside a container | fail, as expected under Docker's default seccomp profile: `fio: pid=689, err=1/file:engines/io_uring.c:1049, func=io_queue_init, error=Operation not permitted` |

@@ -78,7 +78,7 @@ The **balancer** runs in the metadata group's state machine (deterministic, driv
 
 ## 4. Cross-shard transactions
 
-Derived from Granola (Cowling and Liskov, 2012). The description below is our adaptation; details that differ from the paper are marked. Verify against the paper before implementation.
+Derived from Granola (Cowling and Liskov, 2012). The description below is our adaptation; details that differ from the paper are marked. Checked against the paper on 2026-11-18: [04a-granola-sources.md](04a-granola-sources.md) gives the source of every rule in this section, or marks it as ours, and describes each deviation and the timestamp-mode proof obligations. The check against Cowling's thesis is still open (section 8).
 
 ### Cross-shard is the main path (confirmed 2026-11-17)
 
@@ -108,7 +108,7 @@ The compiler reports the class of every program, and a program can be annotated 
 ```
 client -> each participant primary:  propose(txn id, params, client_ts)
 participant:  op "propose": log it, pick proposed_ts > every ts it has
-              issued and >= client_ts, record txn as pending
+              issued and > client_ts, record txn as pending
 participant -> other participants:    vote(txn id, proposed_ts)
 participant:  when all votes are in:  op "finalize": final_ts = max(votes)
               txn becomes executable at final_ts
@@ -116,8 +116,11 @@ participant:  executes txn when it reaches the head of the timestamp order
 participant -> client:                reply(result part)
 ```
 
-- Two log ops per participant per transaction (propose, finalize). Both are small and batch with other work. (Granola does not need the second as a logged op; we do, so that every replica executes the transaction at the same log position and storage stays byte-identical.)
+- The proposed timestamp is strictly above `client_ts` (corrected 2026-11-18; it said `>=`). With `>=` a transaction could tie with one the client has already seen and, on the tie-break below, be ordered before it.
+- Transactions are ordered by `(timestamp, transaction id)`: two transactions finalized at the same timestamp on a shard execute in transaction-id order, as in Granola.
+- Two log ops per participant per transaction (propose, finalize). Both are small and batch with other work. (Granola piggybacks the final timestamp on later log messages and does not wait for it to be stable before executing; we log finalize as an op of its own, so that every replica executes the transaction at the same log position and storage stays byte-identical. This costs one replication round of latency.)
 - Votes are derived from logged state, so after a view change the new primary re-sends them. A participant that has not heard a vote re-requests it. The client is not needed after the first message.
+- **Refusal vote** (added 2026-11-18). A participant that refuses a transaction it has not proposed (`busy`, `unavailable`, `too_old`, or the timestamp guard) logs the refusal in its finished-transaction table and sends a refusal vote instead of a timestamp. A participant that receives a refusal drops the transaction and returns the refusal to the client. This is safe because the refusing participant never voted, so no participant can hold a full set of votes; it is not an abort after voting. Granola does the same with its CONFLICT vote. The refusal is logged so that a later forwarded or retried proposal of the same id is refused again, never proposed.
 - No aborts from conflicts, no locks.
 
 ### Timestamp-order execution
@@ -126,15 +129,25 @@ A shard may execute work at timestamp t only when no transaction can still be as
 
 - `shard_safe_ts = min(proposed_ts of pending transactions) - 1`, or the latest issued timestamp if none are pending.
 - Step 1, strict order: any transaction with timestamp above the oldest pending proposal waits in a queue until that proposal finalizes. Simple and correct, and the first thing built and model-checked.
-- Step 2, conflict-aware bypass, **required before release** (revised 2026-11-18): because pending transactions have declared key sets, a later transaction whose keys do not intersect any pending key set executes immediately. Its effects carry a later timestamp and commute with the pending ones, so the result equals timestamp-order execution. Snapshot reads still respect `shard_safe_ts`.
+- Step 2, conflict-aware bypass, **required before release** (revised 2026-11-18): because every transaction has a declared key set, a later transaction whose keys do not intersect the key set of any transaction ordered before it that has not executed yet executes immediately. That set is the pending transactions **and** the finalized transactions still waiting in the queue (corrected 2026-11-18; it said pending only, which lets a transaction overtake a queued one on the same key). Its effects carry a later timestamp and commute with every transaction it overtakes, so the result equals timestamp-order execution. The declared key set must name every key the transaction reads or writes, including derived-table and index entries. Snapshot reads still respect `shard_safe_ts`.
 
 The queue is part of replicated state and bounded; when full, new requests get `busy`.
+
+### Bounds (fixed 2026-11-18)
+
+| Bound | Value | Reasoning |
+|---|---|---|
+| Participants per transaction | 8 | A settlement has 2; a coordinated insert with global unique indexes adds one per index. Vote traffic grows with the square of the count and a transaction waits for its slowest participant, so a larger set buys little and costs availability. The compiler rejects a program whose static keys can name more than 8 groups. |
+| Pending transactions per shard | 4,096 | A transaction is pending from propose to execute: two replication rounds (propose, finalize) plus one hop, under 2 ms in one data center. At 100,000 cross-shard transactions per second on one shard that is about 200 pending; 4,096 covers a 40 ms stall at that rate, or a 200 ms view change of a peer at 20,000 per second, before `busy`. It is also the size the bypass check is measured at (T5.4.3). |
+| Queue length (work waiting behind an older transaction) | 16,384 | Single-shard writes in the queue each hold a client session, which has one write in flight (document 02 section 7), so they cannot exceed the 16,384 sessions of a group. A cross-shard transaction takes a pending entry when it is accepted, including while it waits for a lock before proposing, so cross-shard work in the queue is counted in the pending limit. The queue therefore fills only if that rule is broken, and `busy` is the safety net. |
+
+These values move to the constants module (T0.1.4), with a static assertion that the queue length is at least the session capacity of a group. Until that module exists, this table is their only home.
 
 ### Failure isolation
 
 With strict order alone, one group that loses its quorum would stall the whole cluster: every shard with a transaction pending against it would queue all later work behind that transaction, and the stall would spread through further cross-shard transactions. Three measures contain it:
 - **Bypass** limits the damage to keys actually involved in transactions with the dead group.
-- **Fail fast.** Shards and clients track group reachability; a new transaction naming an unreachable group is rejected with `unavailable` before it is proposed anywhere, so pending work does not pile up.
+- **Fail fast.** Shards and clients track group reachability; a new transaction naming an unreachable group is rejected with `unavailable` before it is proposed anywhere, so pending work does not pile up. The client checks first; a participant whose view differs refuses with a refusal vote (independent transaction, above), so the others drop the transaction instead of waiting for a vote that will not come.
 - **No unilateral abort.** A participant that has voted cannot abort on its own, because the unreachable group may already hold all votes and finalize when it returns. Transactions already pending with a dead group stay pending until it recovers. This is the unavoidable blocking case of any atomic commit; replication makes it rare (it needs two of a group's three nodes down).
 - `shard_safe_ts` stops advancing on shards with such pending transactions, so snapshot reads on those shards at newer timestamps wait; reads at older timestamps and reads on other shards continue.
 
@@ -157,9 +170,10 @@ participant -> client:    reply
 ```
 
 Locking rules, designed so no distributed deadlock can form:
-- A coordinated prepare that finds any of its keys locked votes `conflict` immediately and takes no locks. The client retries with backoff. It never waits.
+- A coordinated prepare that finds any of its keys locked, **or in the key set of a transaction that has not executed yet** (pending, or queued), votes `conflict` immediately and takes no locks. The client retries with backoff. It never waits. (Corrected 2026-11-18: checking locks alone lets a prepare evaluate its `require` against state that an earlier independent transaction on the same key has not yet changed. Granola avoids the same hazard by preparing in-flight independent transactions when a coordinated one arrives.)
 - A single-shard transaction that touches a locked key waits in the shard queue (bounded) until the lock is released. The lock holder is waiting only on votes, which other shards produce at prepare time without queueing, so the wait is finite.
 - An independent transaction that touches a locked key waits the same way.
+- A transaction that waited for a lock takes its timestamp (or, if independent, its proposed timestamp) only when the lock is released, above the lock holder's final timestamp (corrected 2026-11-18). A timestamp taken earlier could be below the holder's final timestamp, and the waiting transaction would then execute after the holder's writes while being ordered before them. Granola avoids this by answering CONFLICT in locking mode; we wait, so that independent transactions never fail.
 - Locks live in an internal LSM tree, are replicated state, and survive view changes.
 
 Failure handling:
@@ -170,7 +184,7 @@ Failure handling:
 ### Clock coupling between groups
 
 - On every vote and finalize, a participant raises its hybrid-clock floor to the highest timestamp seen. So later transactions on that shard order after it.
-- Guard: a timestamp from a client or another group that is more than a fixed bound (initially 100 ms) ahead of the receiver's synchronised clock is rejected as a fault. Without this, one bad clock could drag the whole cluster's timestamps arbitrarily far into the future.
+- Guard: a timestamp from a client or another group that is more than a fixed bound (initially 100 ms) ahead of the receiver's synchronised clock is rejected as a fault. Without this, one bad clock could drag the whole cluster's timestamps arbitrarily far into the future. Where the rejection happens (clarified 2026-11-18): a client timestamp is checked before propose, and a vote that arrives before this participant has proposed is answered with a refusal vote. A vote that arrives after this participant has voted cannot be refused without breaking atomicity, so the transaction stays pending (the floor is not raised and it does not finalize) and the sender is reported. Since a group assigns timestamps only from a quorum-agreed clock (document 02 section 6), that case needs a whole group's clock to be wrong.
 - Clients send their highest seen timestamp on every request (section 4 of DESIGN.md explains why).
 - Optional per-transaction commit-wait for strict serializability.
 
@@ -210,7 +224,7 @@ This is planned in the operations phase (roadmap E7.4). It reuses standbys, stat
 
 ## 8. To verify or decide
 
-- Granola's exact vote exchange path, recovery rules and the proof obligations for timestamp mode, against the paper and thesis.
-- Whether the independent/coordinated classification can be fully automatic from the IR, or needs a program annotation that the validator checks.
-- Bounds: maximum participants per transaction (proposed 8), pending transactions per shard (proposed 4096), queue length.
+- Granola's vote exchange path, recovery rules and timestamp-mode proof obligations: **answered from the paper** in [04a-granola-sources.md](04a-granola-sources.md) sections 3 to 5 (votes go primary to primary, with no coordinator). Still open: checking each rule marked "ours" and each proof obligation against Cowling's thesis, which could not be fetched on 2026-11-18.
+- Classification: **answered**, fully automatic from the IR and conservative (anything not provably infallible is coordinated); the `independent` annotation only guards against a silent change. Task T5.2.6. Reasoning in 04a section 5.
+- Bounds: **fixed** in section 4, "Bounds": 8 participants, 4,096 pending transactions per shard, a queue of 16,384.
 - The relocatable-part and clipped-part rules against the storage determinism invariant, including a crash of a target replica between reserve and install.

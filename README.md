@@ -29,10 +29,10 @@ It draws on ideas from TigerBeetle, TiDB, ClickHouse and ScyllaDB. It is not aff
 
 ## Building
 
-Requires Rust 1.96 and [just](https://github.com/casey/just).
+Requires Rust 1.96, [just](https://github.com/casey/just) and [cargo-deny](https://github.com/EmbarkStudios/cargo-deny) 0.20 or later (`brew install just cargo-deny`, or `cargo install --locked just cargo-deny`).
 
 ```
-just check      # format check, lints, tests: what CI runs
+just check      # format check, lints, tests, dependency licences: what CI runs
 just run version
 ```
 

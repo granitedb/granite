@@ -50,10 +50,14 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install just
 
+      - uses: taiki-e/install-action@b80e2bb2635f28eb98b9fce1e2f0887e1535c6b2 # v2.90.0
+        with:
+          tool: cargo-deny@0.20.2
+
       # The steps below are `just check`, one recipe per step so a failure names its cause.
       - name: Steps match just check
         run: |
-          test "$(just --show check | grep '^check:')" = "check: crate-graph fmt-check lint test doc gateway roadmap-plan" \
+          test "$(just --show check | grep '^check:')" = "check: crate-graph fmt-check lint test doc gateway roadmap-plan deny" \
             || { echo "::error::The check recipe changed; update the steps in .github/workflows/ci.yml"; exit 1; }
 
       - name: Crate graph
@@ -76,6 +80,9 @@ jobs:
 
       - name: Roadmap plan
         run: just roadmap-plan
+
+      - name: Dependency licences and advisories
+        run: just deny
 
       # `just sim` runs the fixed seed list in crates/sim/ci-seeds.txt (T0.4.5).
       # shortcut: skipped while the recipe does not exist, drop the guard when T0.4.5 lands.

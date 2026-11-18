@@ -21,8 +21,8 @@ Every external crate is code we ship and must trust, so the dependency tree is k
 
 **Audit step.** Before approving, the reviewer:
 
-1. Checks the licence of the crate and of every crate it pulls in against Apache-2.0.
-2. Checks the crate and version against the RustSec advisory database (<https://rustsec.org>).
+1. Checks that `just deny` passes. It rejects any crate, direct or transitive, whose licence is not in the allowed list in `deny.toml`, any crate with a RustSec advisory (<https://rustsec.org>): a vulnerability, or an unmaintained or unsound crate, banned crates, unknown sources, and a second major version of a crate that `deny.toml` does not list as an exception. A change to `deny.toml` that allows a licence, ignores an advisory or adds an exception states why.
+2. Checks that the licence `cargo-deny` read for each new crate matches the crate's own licence files.
 3. Compares `cargo tree -p granite` before and after the change and reads the `Cargo.lock` diff, so every new transitive crate is visible and accounted for.
 4. Reads the crate's `unsafe` code and build script, if it has any, and checks that it is maintained.
 
@@ -36,7 +36,7 @@ Every commit must be signed off, certifying that you have the right to submit it
 git commit -s
 ```
 
-This adds a `Signed-off-by: Your Name <your@email>` line. Commits without it cannot be merged.
+This adds a `Signed-off-by: Your Name <your@email>` line, which must match the commit's author. The `Sign-off` check fails on a pull request that contains a commit without it, and a pull request cannot be merged while that check fails. To sign off commits you already made, run `git rebase --signoff main` and force-push the branch.
 
 ## Licence
 

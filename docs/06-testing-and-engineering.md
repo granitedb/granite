@@ -36,10 +36,10 @@ Until the first server exists, gates G1 to G3 cannot be passed, only prepared. T
 
 ### Open-source hygiene
 
-- Licence: Apache-2.0 is the candidate (the usual choice for Rust infrastructure, with a patent grant). To be confirmed before the repository is created.
+- Licence: Apache-2.0 (the usual choice for Rust infrastructure, with a patent grant), in `LICENSE`.
 - `LICENSE`, `CONTRIBUTING`, `SECURITY` (private vulnerability reporting), code of conduct.
-- Contribution sign-off: Developer Certificate of Origin rather than a contributor licence agreement, unless you want to keep the option of relicensing.
-- `cargo-deny` rejects dependencies with incompatible licences.
+- Contribution sign-off: Developer Certificate of Origin rather than a contributor licence agreement. The `Sign-off` workflow fails a pull request with a commit that is not signed off by its author.
+- `cargo-deny` rejects dependencies with incompatible licences, known advisories, banned crates and duplicate major versions (`deny.toml`, run by `just deny` as part of `just check`).
 - Design documents live in the repository and are public; decisions are recorded there, not in private chat.
 
 ### Assertion policy and its cost
@@ -205,6 +205,7 @@ With three engineers, track D is split between A and B and the schedule stretche
   - `.github/workflows/ci.yml` runs on every pull request and push to main, on Linux x86-64 and macOS: each recipe of `just check` as its own step, then `just sim`, which runs the fixed seed list `crates/sim/ci-seeds.txt`. A seed that once failed is appended to that list. The `io-uring` job checks that the Linux runner allows io_uring (see section 0).
   - `just sim` and `just sim-range` arrive with the seed runner (T0.4.5). Until then the seed steps of both workflows only print a warning and run no seeds.
   - `.github/workflows/nightly.yml` runs `just sim-range FIRST COUNT` on 10,000 seeds, starting at the run number times 10,000, so each night covers new seeds. The log prints the range and the commit.
-  - The jobs of `ci.yml` are required checks for merging to main. Third-party actions are pinned to a commit hash.
+  - `.github/workflows/sign-off.yml` checks on every pull request that each commit has a `Signed-off-by` line matching its author.
+  - The jobs of `ci.yml` and `sign-off.yml` are required checks for merging to main. Third-party actions are pinned to a commit hash.
 - Design changes go through short written proposals in `docs/`, updated in the same change as the code.
 - On-disk and wire formats are versioned from the first commit, even before any compatibility promise.

@@ -177,8 +177,8 @@ pub enum Error {
     Malformed,
     /// The type has no fixed-width storage representation.
     NotFixedWidth,
-    /// An arithmetic result or a cast value outside the range of its type,
-    /// or a Decimal(P, S) operand with more than P digits ([`arith`]).
+    /// An arithmetic result or a cast value outside the range of its type
+    /// ([`arith`]), or a Decimal(P, S) value with more than P digits.
     Overflow,
     /// A division or remainder by zero ([`arith`]).
     DivisionByZero,
@@ -213,8 +213,9 @@ impl Type {
     }
 
     /// Checks that `value` is a valid value of this type: the right variant,
-    /// lengths within bounds, enum indexes declared, text valid UTF-8 (by
-    /// construction of `String`).
+    /// lengths within bounds, enum indexes declared, decimal mantissas of at
+    /// most P digits (else `Overflow`), text valid UTF-8 (by construction of
+    /// `String`).
     pub fn check(&self, value: &Value) -> Result<(), Error> {
         self.validate()?;
         let length = |len: usize, max: u32, exact: bool| {
@@ -238,7 +239,7 @@ impl Type {
                 (4, V::Decimal32(_))
                 | (8, V::Decimal64(_))
                 | (16, V::Decimal128(_))
-                | (32, V::Decimal256(_)) => Ok(()),
+                | (32, V::Decimal256(_)) => arith::digits(*precision, v),
                 _ => Err(Error::Mismatch),
             },
             (Type::U8, V::U8(_))
@@ -264,6 +265,15 @@ impl Type {
             | (Type::Enum8 { .. }, V::Enum8(_))
             | (Type::Enum16 { .. }, V::Enum16(_)) => Ok(()),
             _ => Err(Error::Mismatch),
+        }
+    }
+
+    /// [`Type::check`] of a decoded value, where a decimal of more than P
+    /// digits is `Malformed`: no value encodes to its bytes.
+    fn check_decoded(&self, value: &Value) -> Result<(), Error> {
+        match self.check(value) {
+            Err(Error::Overflow) => Err(Error::Malformed),
+            other => other,
         }
     }
 }

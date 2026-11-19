@@ -101,12 +101,19 @@ fn random_value(ty: &Type, rng: &mut Rng, full: bool) -> Value {
         Type::I64 => Value::I64(rng.next() as i64),
         Type::I128 => Value::I128(rng.u128() as i128),
         Type::I256 => Value::I256(i256(rng)),
-        Type::Decimal { precision, .. } => match decimal_width(*precision) {
-            4 => Value::Decimal32(rng.next() as i32),
-            8 => Value::Decimal64(rng.next() as i64),
-            16 => Value::Decimal128(rng.u128() as i128),
-            _ => Value::Decimal256(i256(rng)),
-        },
+        // Mantissas within ±(10^P - 1); an i256 with |hi| <= 1 is under 2^129 < 10^39.
+        Type::Decimal { precision, .. } => {
+            let p = u32::from(*precision);
+            match decimal_width(*precision) {
+                4 => Value::Decimal32(rng.next() as i32 % 10i32.pow(p)),
+                8 => Value::Decimal64(rng.next() as i64 % 10i64.pow(p)),
+                16 => Value::Decimal128(rng.u128() as i128 % 10i128.pow(p)),
+                _ => Value::Decimal256(I256 {
+                    hi: rng.u128() as i128 % 2,
+                    lo: rng.u128(),
+                }),
+            }
+        }
         Type::F32 => Value::F32(f32::from_bits(rng.next() as u32)),
         Type::F64 => Value::F64(f64::from_bits(rng.next())),
         Type::Bool => Value::Bool(rng.next() & 1 == 1),

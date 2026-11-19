@@ -193,7 +193,21 @@ fn kind(ty: &Type) -> Result<Kind, Error> {
 /// The exact value of an integer, or the mantissa of a Decimal.
 fn exact(ty: &Type, v: &Value) -> Result<Num, Error> {
     ty.check(v)?;
-    let n = match v {
+    Ok(num(v))
+}
+
+/// `Overflow` when a Decimal(`precision`, S) mantissa has more than `precision` digits.
+pub(crate) fn digits(precision: u8, mantissa: &Value) -> Result<(), Error> {
+    if num(mantissa).mag >= pow(10, precision) {
+        Err(Error::Overflow)
+    } else {
+        Ok(())
+    }
+}
+
+/// [`exact`] without the check.
+fn num(v: &Value) -> Num {
+    match v {
         Value::U8(x) => Num::pos(Mag::from_u128(u128::from(*x))),
         Value::U16(x) => Num::pos(Mag::from_u128(u128::from(*x))),
         Value::U32(x) => Num::pos(Mag::from_u128(u128::from(*x))),
@@ -214,14 +228,8 @@ fn exact(ty: &Type, v: &Value) -> Result<Num, Error> {
                 Num::new(true, big.sub(Mag::from_u128(x.lo)))
             }
         }
-        _ => unreachable!("kind() admits integers and decimals only"),
-    };
-    if let Type::Decimal { precision, .. } = ty.logical()
-        && n.mag >= pow(10, *precision)
-    {
-        return Err(Error::Overflow);
+        _ => unreachable!("kind() and check() admit integers and decimals only"),
     }
-    Ok(n)
 }
 
 /// `n` as a value of the integer or Decimal type `ty`, or `Overflow`.

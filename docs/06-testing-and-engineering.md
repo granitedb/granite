@@ -52,14 +52,17 @@ The simulator is the primary correctness tool and is built before the things it 
 
 ### The `Io` boundary
 
-All production code reaches the outside world only through these traits:
+All production code reaches the outside world only through these traits (`crates/io/src/traits.rs`):
 
 ```rust
-trait Storage  { read(zone, offset, buf), write(zone, offset, buf), fsync() }   // completion-based
-trait Network  { connect, accept, send(msg), recv() }
-trait Time     { monotonic(), realtime(), tick() }
-trait Random   { seeded PRNG, used only outside the state machine }
+trait Storage  { size(zone), read(tag, zone, offset, len, buf), write(tag, zone, offset, len, buf), fsync(tag) }
+trait Network  { connect(tag, peer), accept(tag), send(tag, conn, len, buf), recv(tag, conn, buf), close(conn) }
+trait Time     { monotonic(), realtime() }                 // nanoseconds
+trait Random   { next_u64() }                              // seeded, used only outside the state machine
+trait Io: Storage + Network + Time + Random { poll() }     // one completion, or none
 ```
+
+The model is completion-based. A storage or network call only submits; its result comes back from a later `poll` as a completion carrying the caller's tag, never inside the submitting call. A full backend refuses a submission at once and returns its buffer, which is the backpressure. Buffers are `Message` handles from the shard's pool, moved into the backend for the operation and back with its completion; a read or receive needs the only handle, a write or send may share it. Errors, including a reset or timed-out connection, arrive in completions. Periodic work and timeouts count ticks that the event loop delivers, so `Time` has no timer. The rules, and why the traits differ from a first sketch, are in [decisions/0003](decisions/0003-io-completion-model.md); `granite_io::memory` is a trivial in-memory implementation and `granite_io::conformance` the suite every backend passes.
 
 Backends:
 - **io_uring** (production, Linux): registered buffers and files, direct I/O, one ring per shard.
@@ -120,7 +123,7 @@ Enforced by clippy configuration, custom lints or review checklists:
 
 ## 4. Runtime
 
-- A hand-written, single-threaded, completion-based event loop per shard on the `io-uring` crate. No general-purpose async runtime in the server. Whether to express protocol code as explicit state machines with callbacks (TigerBeetle's style, simplest to make deterministic) or as `async` on a minimal custom executor is a phase 0 decision to make with a spike; proposed: explicit state machines for `vsr` and `storage`, `async` allowed in the client library.
+- A hand-written, single-threaded, completion-based event loop per shard on the `io-uring` crate. No general-purpose async runtime in the server. Protocol code is written as explicit state machines with callbacks (TigerBeetle's style), in `vsr`, `storage` and the core of the client library; the Rust client may offer an `async` interface on top of its state machine. A spike compared this with `async` on a minimal custom executor: the same traces, no allocation per operation against at least two, and in-flight state in named fields rather than in generated futures ([decisions/0003](decisions/0003-io-completion-model.md)).
 - Shard threads are pinned; memory is allocated from the local NUMA node; interrupts steered away where possible.
 - Scheduling classes with budgets (document 05).
 

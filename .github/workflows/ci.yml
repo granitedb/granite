@@ -94,6 +94,22 @@ jobs:
             echo "::warning::just sim does not exist yet (T0.4.5); the fixed seeds did not run"
           fi
 
+  # The lsm crate's tests under Miri (T1.2.1). Miri needs a nightly toolchain,
+  # which overrides the pinned one in rust-toolchain.toml for this job only.
+  miri:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install nightly with Miri
+        run: rustup toolchain install nightly --profile minimal --component miri
+
+      - name: Miri, lsm crate
+        run: cargo +nightly miri test --locked -p granite-lsm
+
   # Evidence for docs/decisions/0001-io-uring-on-hosted-runners.md.
   io-uring:
     runs-on: ubuntu-24.04

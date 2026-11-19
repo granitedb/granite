@@ -20,6 +20,11 @@
 //!
 //! Registered buffers count against `RLIMIT_MEMLOCK` (`ulimit -l`), so the
 //! limit must cover the pool.
+//!
+//! The data file is locked (`flock`, exclusive) for as long as a ring holds
+//! it. A process killed with writes in flight keeps the lock until the kernel
+//! has finished them, so a restarted backend cannot start while those writes
+//! may still land on top of its own.
 
 #![allow(
     unsafe_code,
@@ -101,7 +106,10 @@ impl Uring {
     ///
     /// Fails with a message naming the cause if the kernel is older than
     /// [`MIN_KERNEL`], io_uring is not allowed, the file cannot be opened
-    /// for direct I/O, or the pool cannot be registered.
+    /// for direct I/O, or the pool cannot be registered. Fails with
+    /// [`io::ErrorKind::WouldBlock`] while the file is locked by another
+    /// backend, including the ring of a killed process whose I/O has not
+    /// finished yet.
     pub fn open(
         path: &Path,
         zone_sizes: [u64; 4],
@@ -134,6 +142,22 @@ impl Uring {
                 "opening {} with O_DIRECT | O_DSYNC",
                 path.display()
             )))?;
+        match file.try_lock() {
+            Ok(()) => {}
+            Err(std::fs::TryLockError::WouldBlock) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::WouldBlock,
+                    format!(
+                        "locking {}: the data file is in use by another backend, or by I/O \
+                         a killed process left in flight",
+                        path.display()
+                    ),
+                ));
+            }
+            Err(std::fs::TryLockError::Error(error)) => {
+                return Err(context(&format!("locking {}", path.display()))(error));
+            }
+        }
         if file.metadata()?.len() < end {
             // The size, and for a new file its directory entry, are durable
             // before any write is reported done.

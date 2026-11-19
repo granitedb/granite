@@ -56,24 +56,43 @@ fn wait(storage: &mut Uring) -> Completion {
     }
 }
 
-/// Opens the backend on `path`. The kernel gives a closed ring's registered
-/// memory back to `ulimit -l` asynchronously, so a ring opened just after
-/// another one closed (an earlier test's, or a killed child's) can be
-/// refused for a moment; such an open is retried for up to five seconds.
+/// Opens the backend on `path`. The kernel releases a closed ring
+/// asynchronously, once the I/O it had in flight is done: only then does its
+/// registered memory go back to `ulimit -l` and its data file's lock go away.
+/// A ring opened just after another one closed (an earlier test's, or a
+/// killed child's) can be refused for that moment, so such an open is
+/// retried for up to five seconds.
 fn open(path: &Path, zones: [u64; 4], capacity: u32, pool: &MessagePool) -> Uring {
+    let mut refused = None;
     for _ in 0..500 {
         match Uring::open(path, zones, capacity, pool) {
-            Err(e) if e.kind() == ErrorKind::OutOfMemory => {
+            Ok(storage) => return storage,
+            Err(e) if matches!(e.kind(), ErrorKind::OutOfMemory | ErrorKind::WouldBlock) => {
+                refused = Some(e);
                 std::thread::sleep(Duration::from_millis(10));
             }
-            opened => return opened.unwrap(),
+            Err(e) => panic!("{e}"),
         }
     }
     let limits = std::fs::read_to_string("/proc/self/limits").unwrap();
     let memlock = limits
         .lines()
         .find(|line| line.starts_with("Max locked memory"));
-    panic!("the pool did not fit in the locked-memory limit within 5 s: {memlock:?}");
+    panic!("still refused after 5 s: {refused:?}; {memlock:?}");
+}
+
+/// A second backend on a data file another one holds is refused, so a
+/// restarted process never shares the file with writes still in flight.
+#[test]
+fn a_data_file_in_use_is_refused() {
+    let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let scratch = Scratch::new("lock");
+    let pool = MessagePool::new(1);
+    let _first = open(&scratch.data(), kill_zones(), 1, &pool);
+    let Err(error) = Uring::open(&scratch.data(), kill_zones(), 1, &pool) else {
+        panic!("a second backend opened the data file");
+    };
+    assert_eq!(error.kind(), ErrorKind::WouldBlock, "{error}");
 }
 
 #[test]

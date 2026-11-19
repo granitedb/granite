@@ -36,7 +36,7 @@ just vm-down    # delete the VM and its data disk
 
 The minimum kernel of 5.6 is the first one with every io_uring operation the design uses: registered files and buffers (5.1), accept and connect (5.5), send and receive (5.6). It is the minimum of the io_uring backend, which refuses to start on an older kernel with an error naming both versions; a test in `crates/io/src/uring.rs` fails if `min_kernel` in `tools/vm/check.sh` differs from it.
 
-The backend registers the shard's message pool with the kernel, and registered memory counts against `RLIMIT_MEMLOCK` (`ulimit -l`, 8 MiB by default on Ubuntu 24.04), so the limit must cover the pool. The tests keep their pools at 4 MiB or less and run one at a time, and since the kernel gives a closed ring's memory back asynchronously, a test whose ring is refused for memory retries for a few seconds.
+The backend registers the shard's message pool with the kernel, and registered memory counts against `RLIMIT_MEMLOCK` (`ulimit -l`, 8 MiB by default on Ubuntu 24.04), so the limit must cover the pool. The tests keep their pools at 4 MiB or less and run one at a time, and since the kernel gives a closed ring's memory back asynchronously, a test whose ring is refused for memory, or for the data file's lock (held until a closed ring's last I/O is done), retries for a few seconds.
 
 Tests that open files with `O_DIRECT` put them on the data disk, not in the repository. The shared folder (virtiofs) accepts `O_DIRECT`, but the write reaches a file on the host through FUSE and the host's page cache, so it says nothing about direct I/O on a block device. Inside the VM, Cargo builds into `/var/tmp/granite-target`, so Linux builds do not overwrite the host's `target/`.
 

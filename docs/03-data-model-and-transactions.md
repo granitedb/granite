@@ -19,6 +19,57 @@ Rules:
 
 Supported changes in the first release: create/drop table, add nullable or defaulted column, drop column, add/drop index, register/retire program. Not supported: changing a column's type, changing keys, changing table kind.
 
+### 1.1 Catalog validation
+
+The catalog (`crates/schema`) holds the schema version and the table groups; a group holds its partitioning (hash or range), its partition key columns (name and type) and its tables; a table holds its kind, columns, primary key (column indexes, each ascending or descending), layout and retention. A catalog is validated as a whole, when it is built and when it is decoded, and the first broken rule rejects it with that rule's code. The codes are part of the protocol.
+
+| Code | Name | Rule |
+|---|---|---|
+| 1 | `Malformed` | The bytes are a catalog encoding (section 1.2): every tag known, no truncation, no trailing bytes, names valid UTF-8, types nested at most three wrappers deep. |
+| 2 | `UnknownVersion` | The encoding version is one this binary reads. |
+| 3 | `TooManyGroups` | At most as many table groups as the table limit of section 8. |
+| 4 | `TooManyTables` | At most the table limit of section 8 in the whole cluster. |
+| 5 | `TooManyColumns` | At most the column limit of section 8 per table, and per partition key. |
+| 6 | `InvalidName` | Every group, table and column name is 1 to 255 bytes. |
+| 7 | `DuplicateName` | Group names and table names are unique in the cluster; column names are unique in their table and in their partition key. |
+| 8 | `InvalidType` | Every column type is valid (section 2: decimal precision and scale, FixedBytes size, nesting of Nullable and LowCardinality). |
+| 9 | `EmptyKey` | Every partition key and every primary key has at least one column. |
+| 10 | `UnknownColumn` | Every column index in a primary key or a layout group names a column of the table. |
+| 11 | `RepeatedKeyColumn` | No column appears twice in a primary key. |
+| 12 | `KeyColumnNotAllowed` | No primary key or partition key column is a float or Nullable, also under LowCardinality (section 2.1). |
+| 13 | `PartitionKeyNotPrefix` | Every primary key in a group starts with the group's partition key columns: same names, same types, same order. |
+| 14 | `KeyTooLarge` | The longest encoding of the primary key, and of the partition key, is within the key limit of section 8: the sum over its columns of the fixed width, or 2 x max + 2 for String and Bytes, whose every byte may be escaped. A key that passes can never fail with `KeyTooLarge` at run time. |
+| 15 | `RowTooLarge` | The static row bound (section 2.4) is within the row limit of section 8 and, with a message header, within one message. |
+| 16 | `NoLayout` | Every table declares its layout: `row`, `columnar` or `groups(...)`. |
+| 17 | `LayoutGroups` | A `groups(...)` layout puts every column in exactly one group and has no empty group. |
+| 18 | `RetentionUnsupported` | Retention is `forever`, or for a versioned table a time after which old versions are dropped. Archiving, and dropping rows of an immutable table, need time segments and are rejected until phase 7. |
+
+### 1.2 Catalog encoding (part of the format)
+
+The persisted and transmitted form of a catalog. Integers are little-endian. Only a valid catalog is encoded, a decoded catalog is validated, and the encoding is canonical: decoding then encoding gives the same bytes. A change needs a new encoding version.
+
+```
+catalog    u16 encoding version (1), u64 schema version, u16 group count, groups
+group      name, u8 partitioning (0 hash, 1 range), columns (the partition key),
+           u16 table count, tables
+table      name, u8 kind (0 immutable, 1 versioned), columns,
+           u16 key column count, per key column: u16 column index, u8 order (0 asc, 1 desc),
+           layout, retention
+columns    u16 count, per column: name, type
+name       u8 length, UTF-8 bytes
+layout     u8: 0 not declared (rejected), 1 row, 2 columnar,
+           3 groups: u16 group count, per group: u16 count, u16 column indexes
+retention  u8: 0 forever, 1 archive after u64 ms, 2 drop after u64 ms
+type       u8 tag, then its parameters:
+           0 u8, 1 u16, 2 u32, 3 u64, 4 u128, 5 u256, 6 i8, 7 i16, 8 i32, 9 i64,
+           10 i128, 11 i256, 12 Decimal (u8 P, u8 S), 13 f32, 14 f64, 15 bool,
+           16 Date, 17 Timestamp (u8 p), 18 Duration (u8 p), 19 Uuid, 20 Id128,
+           21 String (u32 max), 22 Bytes (u32 max), 23 FixedBytes (u32 N),
+           24 Enum8 (u8 index max), 25 Enum16 (u16 index max),
+           26 Nullable (type), 27 LowCardinality (type)
+           where p is 0 for seconds, 1 milliseconds, 2 microseconds, 3 nanoseconds
+```
+
 ## 2. Types
 
 | Group | Types | Notes |
@@ -40,7 +91,7 @@ Strictness:
 - No implicit conversion between any two types. Explicit casts are checked and fail on loss.
 - Overflow, division by zero, invalid UTF-8, length over max, unknown enum value: the event fails with a typed error code. Nothing is truncated or wrapped.
 - Default is NOT NULL. Defaults must be constants.
-- Row size has a static upper bound computed from the schema; it must fit the message size with headroom, otherwise the schema is rejected.
+- Row size has a static upper bound computed from the schema (section 2.4); it must fit the message size with headroom, otherwise the schema is rejected.
 
 Values in memory (`crates/types`): integers are the Rust integers of their width; u256 and i256 are two 128-bit halves, `hi` (u128, or i128 for i256) and `lo` (u128), whose two's complement value is `hi * 2^128 + lo`. A Decimal(P, S) holds its mantissa `m`, the value being `m / 10^S`, in an i32 for P <= 9, an i64 for P <= 18, an i128 for P <= 38 and an i256 above. Date is an i32, Timestamp and Duration an i64 (units of 10^-p seconds), Uuid 16 bytes in RFC 9562 order, Id128 a u128, Enum8 and Enum16 the u8 or u16 index of a declared value. P is from 1 to 76, S from 0 to P; FixedBytes(N) needs N from 1 to the row size limit of section 8; Nullable and LowCardinality do not nest in themselves, nor does Nullable through LowCardinality.
 
@@ -96,6 +147,12 @@ Collision probability. Assume each generator's random bits are uniform and indep
 P(any two ids are equal) <= (G - 1) N / 2^80 + N / 2^80 = G N / 2^80.
 
 For example, 1,000 clients each creating 1,000,000 ids per second for a year (N = 3.2 x 10^16) give at most 2.6 x 10^-5, and the 100,000,000 ids of two generators in the test give at most 1.7 x 10^-16.
+
+### 2.4 Row encoding and static row bound (part of the format)
+
+One row of a table is its columns in declaration order, then a heap. A fixed-width column is its storage representation (section 2.2). A String or Bytes column is a slot of two u32 little-endian, the offset of its content in the heap and its length, and the content goes to the heap, in column order; Nullable puts its flag byte before the slot, and a null is the flag and the slot all zero with nothing in the heap; LowCardinality(T) is encoded as T. Offsets count from the start of the row's heap. A row batch (T1.4.4) places the slots of many rows over one shared heap.
+
+The static row bound of a table is the sum over its columns of the fixed width, or the slot (8 bytes, plus 1 for Nullable) and `max` for String and Bytes. No encoded row exceeds it, and a row with every String and Bytes at its maximum length reaches it. Hidden columns (`_ts`, `_tombstone`, document 01 section 4) are added by the server and are not part of this encoding.
 
 ## 3. Table kinds
 

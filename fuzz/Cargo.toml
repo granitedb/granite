@@ -1,0 +1,26 @@
+# Coverage-guided fuzz targets, run with cargo-fuzz on a nightly toolchain
+# (fuzz/README.md). Not a member of the root workspace, which builds on the
+# pinned stable toolchain.
+[package]
+name = "granite-fuzz"
+version = "0.0.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+# libFuzzer's driver and its Rust bindings, needed by every target.
+libfuzzer-sys = "0.4"
+granite-schema = { path = "../crates/schema" }
+
+[workspace]
+
+[[bin]]
+name = "catalog_decode"
+path = "fuzz_targets/catalog_decode.rs"
+test = false
+doc = false
+bench = false

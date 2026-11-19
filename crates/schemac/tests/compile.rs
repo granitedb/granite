@@ -425,3 +425,35 @@ fn one_mebibyte_inputs_are_bounded() {
         assert!(elapsed.as_secs() < 5, "shape {i} took {elapsed:?}");
     }
 }
+
+/// The tool itself, run twice on the same file, writes the same bytes, and
+/// prints them back as text.
+#[test]
+fn the_tool_is_deterministic() {
+    let tool = env!("CARGO_BIN_EXE_granite-schemac");
+    let schema = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../schemas/exchange.schema");
+    let run = |args: &[&std::ffi::OsStr]| {
+        let out = std::process::Command::new(tool)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        out.stdout
+    };
+    let compile_args = ["compile".as_ref(), schema.as_os_str()];
+    let first = run(&compile_args);
+    assert_eq!(run(&compile_args), first);
+    assert_eq!(
+        Ok(first.clone()),
+        compile("x", &std::fs::read(&schema).unwrap())
+    );
+    let catalog = std::env::temp_dir().join(format!("schemac-{}.catalog", std::process::id()));
+    std::fs::write(&catalog, &first).unwrap();
+    let text = run(&["print".as_ref(), catalog.as_os_str()]);
+    std::fs::remove_file(&catalog).unwrap();
+    assert_eq!(compile("printed", &text), Ok(first));
+}

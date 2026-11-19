@@ -87,7 +87,7 @@ key-column  = name [ "asc" | "desc" ]
 column      = name type
 type        = "u8" | "u16" | "u32" | "u64" | "u128" | "u256" | "i8" | "i16" | "i32" | "i64" | "i128" | "i256"
             | "Decimal" "(" number "," number ")" | "f32" | "f64" | "bool" | "Date"
-            | ( "Timestamp" | "Duration" ) "(" ( "0" | "3" | "6" | "9" ) ")" | "Uuid" | "Id128"
+            | ( "Timestamp" | "Duration" ) "(" number ")" | "Uuid" | "Id128"
             | ( "String" | "Bytes" | "FixedBytes" ) "(" number ")"
             | ( "Enum8" | "Enum16" ) "(" ( number | name { "," name } ) ")"
             | ( "Nullable" | "LowCardinality" ) "(" type ")"

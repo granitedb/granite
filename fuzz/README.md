@@ -16,6 +16,7 @@ Each target's corpus is in `corpus/<target>/`, committed after every gate run; c
 | Target | What it checks |
 |---|---|
 | `catalog_decode` | `granite_schema::Catalog::decode` on arbitrary bytes never panics, and what it accepts encodes back to the same bytes. The corpus grew from the golden catalog of `crates/schema/src/tests.rs`. |
+| `schema_compile` | `granite_schemac::compile` on arbitrary bytes never panics or hangs, and what it accepts prints as text that compiles to the same bytes. Run with `-max_len=1048576` (one message, the input bound of T1.4.5's gate). The corpus grew from `schemas/exchange.schema` and a schema using every form of the grammar. |
 
 ## Gate runs
 

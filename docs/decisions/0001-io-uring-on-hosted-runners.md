@@ -12,7 +12,7 @@ The `io-uring` job in `.github/workflows/ci.yml` runs on `ubuntu-24.04` on every
 
 1. `uname -a` and `kernel.io_uring_disabled` (0 allows all processes, 1 only a privileged group, 2 nobody; absent before Linux 6.6).
 2. On the runner: `fio --name=probe --ioengine=io_uring --rw=read --bs=4k --size=4k --direct=1`. fio's io_uring engine creates a ring with `io_uring_setup`, submits the read and reaps its completion; the step fails if the ring is refused or fewer than one read is issued (`issued rwts: total=1,0,...`).
-3. The same command inside `ubuntu:24.04` under Docker's default seccomp profile. Recorded, not required (`continue-on-error`).
+3. The same command inside `ubuntu:24.04` under Docker's default seccomp profile, in the first run only (result below). The step was then removed: it was not required, and on 2026-11-19 it stalled past the job's time limit twice, which cancels the required `io-uring` check and blocks every pull request.
 
 fio is the Ubuntu package, so the check adds no Rust dependency before T0.3.2 needs the `io-uring` crate.
 

@@ -113,13 +113,3 @@ jobs:
           fio --name=probe --ioengine=io_uring --rw=read --bs=4k --size=4k --direct=1 \
             --filename="$RUNNER_TEMP/probe" | tee "$RUNNER_TEMP/fio.txt"
           grep -q 'issued rwts: total=1,0,' "$RUNNER_TEMP/fio.txt"
-
-      # Docker's default seccomp profile may refuse io_uring. Recorded, not required:
-      # CI never runs Linux-only jobs in a container.
-      - name: The same read inside a container
-        continue-on-error: true
-        run: |
-          docker run --rm -v "$RUNNER_TEMP:/w" -e DEBIAN_FRONTEND=noninteractive \
-            ubuntu:24.04@sha256:73b999393d07f2bf65a40373778a44dc9a6d54ad7718d29247d8ff9413c4d6a8 \
-            bash -c 'apt-get update -qq && apt-get install -y -qq --no-install-recommends fio >/dev/null &&
-              fio --name=probe --ioengine=io_uring --rw=read --bs=4k --size=4k --direct=1 --filename=/w/probe-container'

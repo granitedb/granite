@@ -2,7 +2,8 @@
 //!
 //! A [`Catalog`] describes a cluster's table groups and tables (document 03
 //! section 1). [`Catalog::validate`] applies the rules of document 03
-//! section 1.1, each with its own [`Error`] code. [`Catalog::encode`] and
+//! section 1.1, each with its own [`Error`] code, and [`Catalog::check`]
+//! also says where the broken rule is. [`Catalog::encode`] and
 //! [`Catalog::decode`] are the versioned binary form of section 1.2, and
 //! [`Table::row_size_max`] is the static row bound of section 2.4.
 
@@ -111,44 +112,93 @@ pub enum Error {
     RetentionUnsupported = 18,
 }
 
+/// Where in a catalog [`Catalog::check`] found a broken rule.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Invalid {
+    pub error: Error,
+    /// Index into [`Catalog::groups`].
+    pub group: usize,
+    /// Index into the group's tables; `None` for the group itself and its partition key.
+    pub table: Option<usize>,
+    pub at: At,
+}
+
+/// The part of a group or table that breaks a rule.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum At {
+    Name,
+    /// A column of the table, or of the group's partition key.
+    Column(usize),
+    /// The primary key, or the group's partition key, as a whole.
+    Key,
+    /// A primary key entry, by its position in the key.
+    KeyColumn(usize),
+    Layout,
+    Retention,
+}
+
 /// Bytes of a String or Bytes slot in a row: offset and length, both u32.
 const SLOT: u64 = 8;
 
 impl Catalog {
     /// Checks every rule of document 03 section 1.1; the first broken rule is returned.
     pub fn validate(&self) -> Result<(), Error> {
-        let over = |n: usize, max: u64| n as u64 > max;
-        if over(self.groups.len(), FORMAT.tables_max) {
-            return Err(Error::TooManyGroups);
+        self.check().map_err(|i| i.error)
+    }
+
+    /// [`Catalog::validate`], also saying where the broken rule is.
+    pub fn check(&self) -> Result<(), Invalid> {
+        let invalid = |error, group, table| Invalid {
+            error,
+            group,
+            table,
+            at: At::Name,
+        };
+        let max = FORMAT.tables_max as usize;
+        if self.groups.len() > max {
+            return Err(invalid(Error::TooManyGroups, max, None));
         }
-        let tables = self.groups.iter().map(|g| g.tables.len()).sum();
-        if over(tables, FORMAT.tables_max) {
-            return Err(Error::TooManyTables);
+        let tables: Vec<(usize, usize)> = (self.groups.iter().enumerate())
+            .flat_map(|(g, group)| (0..group.tables.len()).map(move |t| (g, t)))
+            .collect();
+        if let Some(&(g, t)) = tables.get(max) {
+            return Err(invalid(Error::TooManyTables, g, Some(t)));
         }
-        unique(self.groups.iter().map(|g| &g.name))?;
-        unique(self.groups.iter().flat_map(|g| &g.tables).map(|t| &t.name))?;
-        self.groups.iter().try_for_each(TableGroup::validate)
+        unique(self.groups.iter().map(|g| &g.name)).map_err(|(e, g)| invalid(e, g, None))?;
+        unique(tables.iter().map(|&(g, t)| &self.groups[g].tables[t].name)).map_err(|(e, i)| {
+            let (g, t) = tables[i];
+            invalid(e, g, Some(t))
+        })?;
+        for (g, group) in self.groups.iter().enumerate() {
+            group.check().map_err(|(error, table, at)| Invalid {
+                error,
+                group: g,
+                table,
+                at,
+            })?;
+        }
+        Ok(())
     }
 }
 
 impl TableGroup {
-    fn validate(&self) -> Result<(), Error> {
-        columns(&self.partition_key)?;
+    fn check(&self) -> Result<(), (Error, Option<usize>, At)> {
+        columns(&self.partition_key).map_err(|(e, i)| (e, None, At::Column(i)))?;
         if self.partition_key.is_empty() {
-            return Err(Error::EmptyKey);
+            return Err((Error::EmptyKey, None, At::Key));
         }
         // Checked here too, so that a group without tables is one a table can join.
         let mut key_size = 0;
-        for c in &self.partition_key {
+        for (i, c) in self.partition_key.iter().enumerate() {
             key_size +=
                 c.ty.key_size_max()
-                    .map_err(|_| Error::KeyColumnNotAllowed)?;
+                    .map_err(|_| (Error::KeyColumnNotAllowed, None, At::Column(i)))?;
         }
         if key_size > FORMAT.primary_key_size_max {
-            return Err(Error::KeyTooLarge);
+            return Err((Error::KeyTooLarge, None, At::Key));
         }
-        for t in &self.tables {
-            t.validate()?;
+        for (i, t) in self.tables.iter().enumerate() {
+            t.check().map_err(|(e, at)| (e, Some(i), at))?;
             let key = t
                 .primary_key
                 .iter()
@@ -156,7 +206,7 @@ impl TableGroup {
             if t.primary_key.len() < self.partition_key.len()
                 || !self.partition_key.iter().zip(key).all(|(p, c)| p == c)
             {
-                return Err(Error::PartitionKeyNotPrefix);
+                return Err((Error::PartitionKeyNotPrefix, Some(i), At::Key));
             }
         }
         Ok(())
@@ -164,49 +214,50 @@ impl TableGroup {
 }
 
 impl Table {
-    fn validate(&self) -> Result<(), Error> {
-        columns(&self.columns)?;
-        let column = |i: u16| self.columns.get(usize::from(i)).ok_or(Error::UnknownColumn);
+    fn check(&self) -> Result<(), (Error, At)> {
+        columns(&self.columns).map_err(|(e, i)| (e, At::Column(i)))?;
+        let column = |i: u16| self.columns.get(usize::from(i));
         match &self.layout {
-            None => return Err(Error::NoLayout),
+            None => return Err((Error::NoLayout, At::Layout)),
             Some(Layout::Groups(groups)) => {
                 let mut seen = BTreeSet::new();
                 for &i in groups.iter().flatten() {
-                    column(i)?;
+                    column(i).ok_or((Error::UnknownColumn, At::Layout))?;
                     if !seen.insert(i) {
-                        return Err(Error::LayoutGroups);
+                        return Err((Error::LayoutGroups, At::Layout));
                     }
                 }
                 if seen.len() != self.columns.len() || groups.iter().any(Vec::is_empty) {
-                    return Err(Error::LayoutGroups);
+                    return Err((Error::LayoutGroups, At::Layout));
                 }
             }
             Some(Layout::Row | Layout::Columnar) => {}
         }
         if self.primary_key.is_empty() {
-            return Err(Error::EmptyKey);
+            return Err((Error::EmptyKey, At::Key));
         }
         let mut seen = BTreeSet::new();
         let mut key_size = 0;
-        for &(i, _) in &self.primary_key {
-            let c = column(i)?;
+        for (k, &(i, _)) in self.primary_key.iter().enumerate() {
+            let at = At::KeyColumn(k);
+            let c = column(i).ok_or((Error::UnknownColumn, at))?;
             if !seen.insert(i) {
-                return Err(Error::RepeatedKeyColumn);
+                return Err((Error::RepeatedKeyColumn, at));
             }
             key_size +=
                 c.ty.key_size_max()
-                    .map_err(|_| Error::KeyColumnNotAllowed)?;
+                    .map_err(|_| (Error::KeyColumnNotAllowed, at))?;
         }
         if key_size > FORMAT.primary_key_size_max {
-            return Err(Error::KeyTooLarge);
+            return Err((Error::KeyTooLarge, At::Key));
         }
         if !row_fits(self.row_size_max(), &FORMAT) {
-            return Err(Error::RowTooLarge);
+            return Err((Error::RowTooLarge, At::Name));
         }
         match (self.kind, self.retention) {
             // Archiving and dropping rows need time segments (phase 7).
             (_, Retention::Forever) | (Kind::Versioned, Retention::DropAfterMs(_)) => Ok(()),
-            _ => Err(Error::RetentionUnsupported),
+            _ => Err((Error::RetentionUnsupported, At::Retention)),
         }
     }
 
@@ -240,27 +291,30 @@ fn row_fits(size: u64, f: &FormatConstants) -> bool {
     size <= f.row_size_max && size + f.header_size <= f.message_size_max
 }
 
-/// Checks a column list: count, names, types.
-fn columns(columns: &[Column]) -> Result<(), Error> {
-    if columns.len() as u64 > FORMAT.columns_per_table_max {
-        return Err(Error::TooManyColumns);
+/// Checks a column list: count, names, types. The error comes with the
+/// index of the column that breaks the rule.
+fn columns(columns: &[Column]) -> Result<(), (Error, usize)> {
+    let max = FORMAT.columns_per_table_max as usize;
+    if columns.len() > max {
+        return Err((Error::TooManyColumns, max));
     }
     unique(columns.iter().map(|c| &c.name))?;
-    for c in columns {
-        c.ty.validate().map_err(|_| Error::InvalidType)?;
+    for (i, c) in columns.iter().enumerate() {
+        c.ty.validate().map_err(|_| (Error::InvalidType, i))?;
     }
     Ok(())
 }
 
-/// Names are 1 to 255 bytes and unique in their scope.
-fn unique<'a>(names: impl Iterator<Item = &'a String>) -> Result<(), Error> {
+/// Names are 1 to 255 bytes and unique in their scope. The error comes with
+/// the index of the offending name.
+fn unique<'a>(names: impl Iterator<Item = &'a String>) -> Result<(), (Error, usize)> {
     let mut seen = BTreeSet::new();
-    for name in names {
+    for (i, name) in names.enumerate() {
         if name.is_empty() || name.len() > usize::from(u8::MAX) {
-            return Err(Error::InvalidName);
+            return Err((Error::InvalidName, i));
         }
         if !seen.insert(name) {
-            return Err(Error::DuplicateName);
+            return Err((Error::DuplicateName, i));
         }
     }
     Ok(())

@@ -21,7 +21,7 @@ Supported changes in the first release: create/drop table, add nullable or defau
 
 ### 1.1 Catalog validation
 
-The catalog (`crates/schema`) holds the schema version and the table groups; a group holds its partitioning (hash or range), its partition key columns (name and type) and its tables; a table holds its kind, columns, primary key (column indexes, each ascending or descending), layout and retention. A catalog is validated as a whole, when it is built and when it is decoded, and the first broken rule rejects it with that rule's code. The codes are part of the protocol.
+The catalog (`crates/schema`) holds the schema version and the table groups; a group holds its partitioning (hash or range), its partition key columns (name and type) and its tables; a table holds its kind, columns, primary key (column indexes, each ascending or descending), layout and retention. A catalog is validated as a whole, when it is built and when it is decoded, and the first broken rule rejects it with that rule's code and its place: the group, the table and the column, key entry, layout or retention that breaks it. The codes are part of the protocol.
 
 | Code | Name | Rule |
 |---|---|---|
@@ -69,6 +69,41 @@ type       u8 tag, then its parameters:
            26 Nullable (type), 27 LowCardinality (type)
            where p is 0 for seconds, 1 milliseconds, 2 microseconds, 3 nanoseconds
 ```
+
+### 1.3 Schema text syntax
+
+Schemas are written as text files and compiled into the encoding of section 1.2 by `granite-schemac` (`crates/schemac`), which is client tooling: the server never links it and only the binary form crosses the wire. Its output is a function of the input bytes alone. Derived tables, programs and indexes are added to the syntax by their own tasks.
+
+```
+schema      = "schema" "version" number { group | table }
+group       = "table" "group" name "partition" "by" "(" [ column { "," column } ] ")" ( "hash" | "range" )
+table       = "table" name ( "immutable" | "versioned" ) [ "layout" layout ] "in" name
+              "key" "(" [ key-column { "," key-column } ] ")"
+              column { "," column }
+              [ "retention" ( "forever" | ( "archive" | "drop" ) "after" number "ms" ) ]
+layout      = "row" | "columnar" | "groups" "(" [ names { "," names } ] ")"
+names       = "(" [ name { "," name } ] ")"
+key-column  = name [ "asc" | "desc" ]
+column      = name type
+type        = "u8" | "u16" | "u32" | "u64" | "u128" | "u256" | "i8" | "i16" | "i32" | "i64" | "i128" | "i256"
+            | "Decimal" "(" number "," number ")" | "f32" | "f64" | "bool" | "Date"
+            | ( "Timestamp" | "Duration" ) "(" ( "0" | "3" | "6" | "9" ) ")" | "Uuid" | "Id128"
+            | ( "String" | "Bytes" | "FixedBytes" ) "(" number ")"
+            | ( "Enum8" | "Enum16" ) "(" ( number | name { "," name } ) ")"
+            | ( "Nullable" | "LowCardinality" ) "(" type ")"
+name        = word | quoted
+word        = ( letter | "_" ) { letter | digit | "_" }       ASCII letters and digits
+quoted      = '"' { any character but '"' and '\', or '\"', or '\\' } '"'
+number      = digit { digit }                                  decimal, at most 2^64 - 1
+```
+
+- Whitespace separates tokens and is otherwise free; `--` starts a comment that runs to the end of the line. Keywords are words that the grammar expects at that place, so a column may be called `key`; only a table called `group` must be quoted.
+- The file is the catalog: its schema version, its groups in file order, and each group's tables in file order. A group is declared before its tables. Columns are stored in declaration order, and keys and layout groups name columns of their own table.
+- Retention is `forever` when it is not written. A table without `layout` is rejected with `NoLayout`: there is no default.
+- `Timestamp(p)` and `Duration(p)` take the number of decimal digits of the second: 0, 3, 6 or 9.
+- An enum declares its values by name, which the client uses, or by their number. The catalog keeps only the number, as the highest index (section 1.2), so a printed catalog shows the number.
+- Errors name the file, the line and the column (both from 1, the column in characters) and either a rule of section 1.1 with its code or what the grammar expected. A file that is not UTF-8 breaks rule 1, `Malformed`, at its first invalid byte. A type nested more than three wrappers deep, which the encoding cannot hold, always repeats a wrapper and is reported as `InvalidType`. Rule 2, `UnknownVersion`, is about the version of the binary encoding, which text does not carry; the compiler always writes the current one.
+- `granite-schemac print` prints a binary catalog as canonical text: one declaration per paragraph, each column on its own line, names quoted only where needed, `asc` and `retention forever` left out. Compiling the printed text gives the same bytes.
 
 ## 2. Types
 
@@ -277,7 +312,7 @@ For workflows that span external systems, the schema library provides a standard
 The first application is an exchange. Transactions are between two arbitrary users, so with hash partitioning by user almost every trade crosses shards. The schema is designed so that the cross-shard part can never fail, which makes it an independent transaction: no locks, no aborts.
 
 ```
-table group by_user partition by (user_id) hash
+table group by_user partition by (user_id u64) hash
 
 table entry immutable layout row in by_user          -- the ledger, one row per leg
   key (user_id, id)

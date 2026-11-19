@@ -154,10 +154,18 @@ mod arm {
         }
         #[inline(always)]
         fn round(self, key: Self) -> Self {
-            // AESE with a zero key is SubBytes and ShiftRows; AESMC is MixColumns.
             // SAFETY: only reached from `mac`, which enables the AES instructions.
-            unsafe { veorq_u8(vaesmcq_u8(vaeseq_u8(self, vdupq_n_u8(0))), key) }
+            unsafe { aes_round(self, key) }
         }
+    }
+
+    /// The body of `round`, in a function that enables the AES instructions:
+    /// their intrinsics are only inlined into one, and a safe trait method
+    /// cannot enable target features. Linux does not enable them by default.
+    #[target_feature(enable = "aes")]
+    fn aes_round(state: uint8x16_t, key: uint8x16_t) -> uint8x16_t {
+        // AESE with a zero key is SubBytes and ShiftRows; AESMC is MixColumns.
+        veorq_u8(vaesmcq_u8(vaeseq_u8(state, vdupq_n_u8(0))), key)
     }
 }
 

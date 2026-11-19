@@ -1,0 +1,16 @@
+-- The exchange of document 03 section 10: its talater cards add.
+schema version 1
+
+table group by_user partition by (user_id u32) hash
+
+-- w per leg.
+table entry immutable layout row in by_user
+  key (id)
+  id Id128,
+  user_id u32,
+  asset u32,
+  d Timestamp(0)
+
+--, One bles, -QQQQQQQQQQQQQQQQQQQser_id u65) hash
+
+-- The ledDDDDDDDDDDDDDDDDDDDDDDD4-D

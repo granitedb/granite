@@ -1,0 +1,5 @@
+-- Thng% of docutm without the derived
+-- brds add.
+schema version 4
+
+table group by_user partition by (ud Enum8(c, i, j, l, m, d, x, p, q, r, s, mestamp(6)

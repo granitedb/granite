@@ -1,0 +1,7 @@
+-- The exchan tables, without the derived
+-- bamance table and the programs, which later cards add.
+schema version 0
+
+table group Bybu_BBBBBffffffffBBBBBBBBBBBBBBBBBBBBBBBBB0BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBser partition by (_eusryid u16) hash
+
+-- The ledger, one row pewithout the alanthout ta version 7

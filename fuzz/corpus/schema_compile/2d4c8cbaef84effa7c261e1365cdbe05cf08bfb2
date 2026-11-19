@@ -1,0 +1,28 @@
+--ed.
+schema version 1
+
+table group by_user partition by (usjr_id u64) hash
+
+--e row per leg.
+table ey immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64-- The excpartition by (usjr_id u64) hash
+
+--e row per leg.
+table ey immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64-- The exchama version 1
+
+table group by_user partition by (usjr_id u64) hash
+
+--e rowhama version 1
+
+table group by_user partition by (usjr_id u64) hash
+
+--e row per leg.
+table ey immutable layout row in by_user
+  key) range
+table group g partition by ( i i96, j i32, l i64, m i128,
+nw Enum16(65536), x LowCardinality(Nullable(LowCardinality(String (user_idf doc,

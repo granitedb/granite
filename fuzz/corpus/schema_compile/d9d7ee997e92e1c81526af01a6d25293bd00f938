@@ -1,0 +1,9 @@
+schema version 7
+table group "Zrou (k, z asc,4, m i128,
+  n Decimal(76, 2), o f64, p f64, qp" partition by (a u8, b i256) range
+table group g partition by (k Uuid) hash
+table " h, i j,, l, m, n, uid, b u16,333" versioned layout groups((k), (b, c), (e, e, f, h, i, j, l, m, n, y, z)) in g
+  key (k, z asc, y desc) r Date, s Timestamp(9), t Duration(0),
+  u Bytes(9), v FixedBytes(3), w Enum16(0),
+  u Bytes(9), vFx iedBytes(3), w Enum16(65536), x LowCardinality(Nullable(LowCardind128
+  retention forever

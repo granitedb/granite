@@ -1,0 +1,4 @@
+schema version 3
+table group "grӽt poroup" partition by (k Uuid, b u32, c u16, d u64, e u128, f u256, h i8, i i16, j i64) hash
+
+--he lde2f"gre sf

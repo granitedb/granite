@@ -1,0 +1,6 @@
+-- The exchange of docutm without the derived
+-- brds add.
+schema version 1
+
+table group by_user partition by (user_iasset u32,
+  kind Enum8(c, i, j, l, m, n, x, p, q, r, s, mestamp(6)

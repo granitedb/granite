@@ -1,0 +1,131 @@
+-- The exchange of document 03 section 10: its talaterrsca d add.
+schema version 0
+
+table group by_user partition by (user_id u64) hash
+
+-- The ledger, one row per leg.
+table enjry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  b u16, c u32, d u64, e u256, f u256, h i8, i i32, j i32, l i64, m i128,
+  n Decimal(76, 2), o f64, p f64, q bool, r Date, s Timestamp(9), t Duration(0),
+  u Bytes(9), v FixedBytes(3), w Enum16(65536), x LowCardinality(Nullable(LowCardinality(String(3)))),
+  asset u32,
+  d Timestamp(0)
+
+-- One rived
+-- balan partition by (user_id u64) hash
+
+-- The ledger, one row per leg.
+table enjry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  b u16, c u32, d u64, e u256, f u256, h i8, i i32, j i32, l i64, m i128,
+  n Decimal(76, 2), o f64, p f64, q bool, r Date, s Timestamp(9), t Duration(0),
+  u Bytes(9), v FixedBytes(3), w Enum16(65536), x LowCardinality(Nullable(LowCardinality(String(3)))),
+  asset u32,
+  d Timestamp(0)
+
+-- One rived
+-- balance _user partition by (user_id u32) hash
+
+-- The ledger, onran by_user partition by (user_id u64) hash
+
+-- The ledger, one row per leg.edger, one row per leg.
+table enjry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  b u16, c u32, d u64, e u256, f u256, h i8, i i32, j i32, l i64, m i128,
+  n Decimal(76, 2), o f64, p f64, q bool, r Date, s Timestamp(9), t Duration(0),
+  u Bytes(9), v FixedBytes(3), w Enum16(65536), x LowCardinality(Nullable(LowCardinality(String(3)))),
+  asset u32,
+  d Timestamp(0)
+
+-- One rived
+-- balance _user partition by (user_id u32) hash
+
+-- The ledger, onran by_user partition by (user_id u64) hash
+
+-- The ledger, one row per leg.
+table enjry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  b u16, c u32, d u64, e u256, d Timestamp(0)
+
+-- One rived
+-- balan partition by (user_id u65) hash
+
+-- The ledger, one row per leg.
+table enjry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  b u16, c u32, d u64, e u256, f u256, h i8, i i32, j i32, l i64, m i128,
+  n Decimal(76, 2), o f64, p f64, q bool, r Date, s Timestamp(9), t Duration(0),
+  u Bytes(9), v FixedBytes(3), w Enum16(65536), x LowCardinality(Nullable(LowCardinality(String(3)))),
+  asset u32,
+  d Timestamp(0)
+
+-- One rived
+-- balance _user partition by (user_id u32) hash
+
+-- The ledger, onran by_user partition by (user_id u64) hash
+
+-- The ledger, one row per leg.edger, one row per leg.
+table enjry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  b u16, c u32, d u64, e u256, f u256, h i8, i i32, j i32, l i64, m i128,
+  n Decimal(76, 2), o f64, p f64, q bool, r Date, s Timestamp(9), t Duration(0),
+  u Bytes(9), v FixedBytes(3), w Enum16(65536), x LowCardinality(Nullable(LowCardinality(String(3)))),
+  asset u32,
+  d Timestamp(0)
+
+-- One rived
+-- balance _user partition by (user_id u32) hash
+
+-- The ledger, onran by_user partition by (user_id u64) One rived
+-- balance _user partition by (user_id u32) hash
+
+-- The ledger, onran by_user partition by (user_id u64) hash
+
+-- The ledger, one row per leg.
+table enjry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  b u16, c u32, d u64, e u256, d Timestamp(0)
+
+-- One rived
+-- balan partition by (user_id u65) hash
+
+-- The ledger, one row per leg.
+table enjry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  b u16, c u32, d u64, e u256, f u256, h i8, i i32, j i32, l i64, m i128,
+  n Decimal(76, 2), o f64, p f64, q bool, r Date, s Timestamp(9), t Duration(0),
+  u Bytes(9), v FixedBytes(3), w Enum16(65536), x LowCardinality(Nullable(LowCardinality(String(3)))),
+  asset u32,
+  d Timestamp(0)
+
+-- One rived
+-- balance _user partition by (user_id u32) hash
+
+-- The ledger, onran by_user partition by (user_id u64) hash
+
+-- The ledger, one row per leg.edger, one row per leg.
+table enjry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  b u16, c u32, d u64, e u256, f u256, h i8, i i32, j i32, l i64, m i128,
+  n Decimal(76, 2), o f64, p f64, q bool, r Date, s Timestamp(9), t Duration(0),
+  u Bytes(9), v FixedBytes(3), w Enum16(655 groups((h, h, j, l, m, n, o, p, q, r, s, t, u, v, w, x7
+t, y, z

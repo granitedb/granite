@@ -1,0 +1,3 @@
+schema version 7
+table group "group" partition by (a u8, b  FixedBytes(3), de Enum8(65536),n4(gi)))),
+ 

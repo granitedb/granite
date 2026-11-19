@@ -1,0 +1,16 @@
+-- The exchange of docutm without the derived
+-- brds add.
+schema version 1
+
+table group by_user partition by (user_id u64) hash
+
+-- The ledger, one row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(c, i, j, l, m, n, o, p, q, r, s, t, u, v, , h i8, i i16$ ost Decimal(38, 18),
+" ref Id128   de id
+),
+  traded Timestamp(6)

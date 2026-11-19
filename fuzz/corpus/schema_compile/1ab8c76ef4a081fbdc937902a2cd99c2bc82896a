@@ -1,0 +1,5 @@
+schema version 7
+table group "group" partition by (a u8, b i256) range
+table group g partition by (i Uuid) hash
+table "x \"y\" \\" versioned layout groups((k), (bDLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLk), (bDLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLbLLLLLLLLk), (b, c), (d, e, f, h, i, j, l, m, n, ob, c), (d, eLLLLLLLLLLL, c), (d, e, f, h, i, j, l, m, n, o, p, q, r, sLLbLLLLLLLLk), (b, c), (d, e, f, h, i, j, l, m, n, ob, c), (d, eLLLLLLLLLLL, c), (d, e, f, h, i, j, l, m, n, o, p, q, r, s, t, u, z)) in g~  key (k, z asc, y desc)
+k) k Uuid retention forev(d

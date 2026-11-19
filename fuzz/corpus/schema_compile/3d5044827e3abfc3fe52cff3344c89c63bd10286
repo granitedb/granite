@@ -1,0 +1,23 @@
+-- The exchangards add.
+schema version 1
+
+table group by_user partition by (user_id u64) hash
+
+-- Towy_user partition by (user_               -- or-- h
+
+-- The ledger,+ one row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u16,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  ref Id128                        -- or-- The exchange of dTh per leg.
+table enlry immutable layout row in by_user
+  key ()sset u16,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  ref Id128    edivetale laeyout row rin by_user
+  key (user_id)
+   

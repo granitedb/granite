@@ -1,0 +1,3 @@
+schema version 7
+table group "#group" partition by (a u8, b LowCardinality(LowCardinality(Nullable(LowCardinality(String(4),
+si

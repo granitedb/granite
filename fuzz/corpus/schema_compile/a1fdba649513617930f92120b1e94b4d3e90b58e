@@ -1,0 +1,14 @@
+-- The exchange of document 03 slance table and the programs, which later cards add.
+schema version 1
+
+table group bs_user partition by (user_id u64) hash
+
+-- The ledgegrams, which later cards add.ma version 0
+
+table group by_sure partition by (user_id u64) hash
+
+-- The ledDDDDDDDDDDD cards add.ma version 0
+
+table group by_user partition by (user_id u64) hash
+
+-- T-- Theh e

@@ -1,0 +1,5 @@
+-- The angards add.
+schema version 1
+
+table group byeus_r partition by (3333333333333333333333userquote u32,
+  qty Decb-- tablT gr

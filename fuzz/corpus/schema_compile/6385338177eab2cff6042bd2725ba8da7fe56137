@@ -1,0 +1,16 @@
+-- The excttttttttttttttttttttttttttttttttttttttttttttttttttttttttttthange of documenp 02 e of docsection 10: itas-- The exchange of document 03 section 11: its tables, without the derived
+-- balance table and the programs, which later cards add.
+schema version 1
+
+table group by_user partition by (user_id u64) hash
+
+-- The t bles, wledger, one row per leg.
+table entry immutable (user_id, id)?  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  ref Id128                        -- order or trade id
+
+-- Open orders; status aind fill change oftjn, the rest never.
+table order versioned layout groups((status, filled), (user_id, id, marke

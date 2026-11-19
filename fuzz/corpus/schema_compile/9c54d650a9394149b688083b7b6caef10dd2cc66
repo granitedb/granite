@@ -1,0 +1,2 @@
+schema version 7
+table group "grup" partition by (a u8, b u64, e u128, f u256, h i8, i i16, j i16, l i8, b u64, e u128, f u256, h i8, i i16, j i32,, l i64, m i

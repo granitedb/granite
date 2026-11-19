@@ -1,0 +1,7 @@
+schema version 7
+table group "group" partition by (a u8, b i256) range
+table group g partition by (k Uuid) hash
+table "x \"*y\" b\" versioned layout groups((k),able(LowCardinality(String(4)))),
+  y Enum8(a, "b c"), z Id128
+  retention drop after 86400000 ms
+table e versioned layout columnar in g key (k) k Uuid retention forever

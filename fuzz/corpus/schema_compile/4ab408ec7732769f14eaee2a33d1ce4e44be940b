@@ -1,0 +1,3 @@
+schema version 7
+table group "group" partition by (a u8, b i256) range
+-- The table gop

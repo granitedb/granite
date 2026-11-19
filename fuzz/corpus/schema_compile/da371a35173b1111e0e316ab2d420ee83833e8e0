@@ -1,0 +1,22 @@
+-- The exchan tables, withoadd.
+schema version 5
+
+table group by_user partition by (user_id u32) hash
+
+--
+
+table group Bw_Tuser partition by (user_id u32) hash
+
+-- Th_id u32) hash
+
+-- The l the derived
+-- ived
+table group by_1ser partition by (user_id u32) hash
+
+-- The l the bamance table and e derived
+-- ived
+table group b0_1ser partition by (user_id u32) hash
+
+-- Tid u32) hash
+
+-- The l the l the bamance table and the proversoups((k), the proversoups((k), (b, c), (d,

@@ -1,0 +1,44 @@
+-- The exchan tables, withoadd.
+schema version 5
+
+table group by_user partition by (user_id u32) hash
+
+--
+
+table group By_user partition by (user_id u32) hash
+
+-- The ledger, on the derived
+table group by_user partition by (user_id u32) hash
+
+-- The l the derived
+-- ived
+table group by_user partition by (user_id u32) hash
+
+-- The l the bamance tabl The ledger, on the derived
+table group by_user partition by (user_id u32) hash
+
+-- The l the derived
+-- ived
+table group by_1ser partition by (user_id u32) hash
+
+-- The l the bamance table and the proversouon by (user_id u32) hash
+
+--
+
+table group By_user partition by (user_id u32) hash
+
+-- The ledgerived
+table group by_user partition by (user_id u32) hash
+
+-- The l the derived
+-- ived
+table group by_user partition by (user_id u32) hash
+
+-- The l the bamance tabl The ledger, on the derived
+table group by_user partition by (user_id u32) hash
+
+-- The l the derived
+-- ived
+table group by_1ser partition by (user_id u32) hash
+
+-- The l the bamance table and the proversps((k), (b, c), (d,

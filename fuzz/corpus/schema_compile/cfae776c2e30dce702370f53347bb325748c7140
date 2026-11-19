@@ -1,0 +1,6 @@
+schema version 7
+table group "group" partition by (a u8, b i256) range
+table group g partition by (k Uuid) hash
+table "x \"y\" \\" versioned layout groups((k), (b, c), (dinality(Nullable(LowCardinality(String(4)))),
+  y Enum8sc(a, "b c"hem), z Id12a vers8
+ i r

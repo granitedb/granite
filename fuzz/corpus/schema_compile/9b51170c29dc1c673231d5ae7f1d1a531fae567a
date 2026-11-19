@@ -1,0 +1,16 @@
+-- The exchange of document 03ter caids add.
+schema version 2
+
+table group by_user partition by (user_id  u64,
+  asset u32,
+  et u64,
+  asset u32,
+  et u64,
+  kind Enum8(cred, l, m, n, o, p, ebit, holit, debit, holase),_id u64,
+  asset u32,
+  et u32,
+  kind Enum8(credit, debit, holase),_id u64,
+  ass Enum8( i, j, l, m, n, o, ebit,redit, debit, holase),_id u64,
+  asset u32,
+  kiet u32,
+  kind Enum8(credit,d, e, f, h, i, j, l, it, dlase),_id u6 refa  v

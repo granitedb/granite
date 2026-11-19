@@ -1,0 +1,6 @@
+-- The exchange of document 03 se.
+schema version 0
+
+table group by_siuser partition by (user_oupid u64) hash
+
+-- The lsc

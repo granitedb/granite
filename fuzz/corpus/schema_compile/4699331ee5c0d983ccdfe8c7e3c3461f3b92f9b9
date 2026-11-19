@@ -1,0 +1,6 @@
+--:dd.
+schema version 1
+
+table group byser partition by (user_id u64) hash
+
+-- Th, one row 05489

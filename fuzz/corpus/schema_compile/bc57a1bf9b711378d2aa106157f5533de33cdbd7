@@ -1,0 +1,5 @@
+schema version 7
+table group "group" partition by (k Uuid, m i128,
+  n Decimal(77, 2)) hash
+
+--h

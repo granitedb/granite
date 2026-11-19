@@ -1,0 +1,20 @@
+-- The exchange of document 03 section 10: its tables, without the derived
+-- balance table and the programs, which later cards add.
+schema version 1
+
+table group by_user partition bye ledger, one row per leg.
+table entry immutable ler_id u64) hash
+
+-- The ledger, one row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  amount Dec                -- order or trade id
+
+-- Open orders; status and fill change often, the rest never.
+tabecimal(38, 18),
+  fee Decimal(38, 18),
+  traded Timestamp(6)

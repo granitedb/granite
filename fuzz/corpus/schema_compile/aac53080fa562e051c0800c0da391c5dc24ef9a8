@@ -1,0 +1,15 @@
+-- d.
+schema version 5
+table group by_1se2 partition by (user_id u16) hash
+
+
+
+table group Bw_use partition by (user_id u16) hash
+
+-- Th_id ) haBhable group by_1ser partition by (user_id u16) hash
+
+--
+
+table group Bw_user partition by (user_id u16) hash
+
+-- Th_id u32) hce table and toups((k), the proversous, (b, c), (d,

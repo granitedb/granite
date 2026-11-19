@@ -1,0 +1,26 @@
+-- The exchanoadd.
+schema version 5
+
+table group by_user partition by (user_id u32) hash
+
+--
+
+table group Bw_user partition by (user_id u32) hash
+
+-- Th_id u320 hash
+
+-- The l tBw_user parthe provehe derived
+-- ived
+table group by_1ser partition by (user_id u32) hash
+
+-- The l the bamance table and e dd e derived
+-- ived
+table group b0_1ser partition by (user_id u32) hash
+
+-- The l thion by (user_id u32) hash
+
+-- The l the bamance table and e derived
+-- ived
+table group b1_1ser partition by (user_id u32) hash
+
+-- The l the bamanc(b, c), (d,

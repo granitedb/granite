@@ -1,0 +1,450 @@
+-- The ex10: its tabl cards add.
+schema version 1
+
+table group by_user partition by (user_id u64) hash
+
+-- T.
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(38, 18),
+  status Enum8(open, filled, cancelled),
+  placed Timestamp(3)
+
+-- One row per s placed)) in by_estr partition by (user_id u64) hash
+
+-- .
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(38, 18),
+   placed Timestamp(3)
+
+-- One row per s placed))user partition by (user_id u64) hash
+
+-- T.
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(38, 18),
+  status Enum8(open, filled, cancelled),
+  placed Timestamp(3)
+
+-- One row per s placed)) in by_estr partition by (user_id u64) hash
+
+-- .
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(38, 18),
+   placed Timestamp(3)
+
+-- O!e row per s pion 1
+
+table group by_user partition by (user_id u64) hash
+
+-- T.
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(38, 18),
+  status Enum8(open, filled, cancelled),
+  placed Timestamp(3)
+
+-- One row per s placed)) in b.
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(38, 18),
+  status Enum8(open, filled, cancelled),
+  placed Timestamp(3)
+
+-- One row per s placed)) in by_estr partition by (user_id u64) hash
+
+-- .
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(38, 18),
+   placed Timestamp(3)
+
+-- One row per s placed))user partition by (user_id u64) hash
+
+-- T.
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(38, 18),
+  status Enum8(open, filled, cancelled),
+  placed Timestamp(3)
+
+-- One row per s placeaced Timestamp(3)
+
+-- One row per s placed))user partition by (user_id u64) hash
+
+-- T.
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(38, 18),
+  status Enum8(open, filled, cancelled),
+  placed Timestamp(3)
+
+-- One row per s placed)) in by_estr partition by (user_id u64) hash
+
+-- .
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(38, 18),
+   placed Timestamp(3)
+
+-- O!e row per s pion 1
+
+table group by_user partition by (user_id u64) hash
+
+-- T.
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(38, 18),
+  status Enum8(open, filled, cancelled),
+  placed Timestamp(3)
+
+-- One row per s placed)) in b.
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(38, 18),
+  status Enum8(open, filled, cancelled),
+  placed Timestamp(3)
+
+-- One row per s placed)) in by_estr partition by (user_id u64) hash
+
+-- .
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(38, 18),
+   placed Timestamp(3)
+
+-- One row per s placed))user partition by (user_id u64) hash
+
+-- T.
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(38, 18),
+  status Enum8(open, filled, cancelled),
+  placed Timestamp(3)
+
+-- One row per s placed)) in by_estr partition by (user_id u64) hash
+
+-- .
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(38, 18),
+   placed Timestamp(3)
+
+-- O!e row per s pion 1
+
+table group by_user partition by (user_id u64) hash
+
+-- T.
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(38, 18),
+  status Enum8(open, filled, cancelled),
+  placed Timestamp(3)
+
+-- One row per s placed)) in by_estr partition by (user_id u64) hash
+
+-- .
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(38, 98),
+   placed Timestamp(3)
+
+-- One row per s placed))user pary_est@r partition by (user_id u64) hash
+
+-- .
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(38, 18),
+   placed Timestamp(3)
+
+-- One rod)) in by_estry_estr partition by (user_id u64) hash
+
+-- .
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(38, 18),
+   placed Timestamp(3)
+
+-- One row per s placed))user partition by (user_id u64) hash
+
+-- T.
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(38, 18),
+  status Enum8(open, filled, cancelled),
+  placed Timestamp(3)
+
+-- One row per s placed)) in by_estr partition by (user_id u64) hash
+
+-- .
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(38, 18),
+   placed Timestamp(3)
+
+-- O!e row per s pion 1
+
+table group by_user partition by (user_id u64) hash
+
+-- T.
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(38, 18),
+  status Enum8(open, filled, cancelled),
+  placed Timestamp(3)
+
+-- One row per s placed)) in b.
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(38, 18),
+  status Enum8(open, filled, cancelled),
+  placed Timestamp(3)
+
+-- One row per s placed)) in by_estr partition by (user_id u64) hash
+
+-- .
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(38, 18),
+   placed Timestamp(3)
+
+-- One row per s placed))user partition by (user_id u64) hash
+
+-- T.
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(38, 18),
+  status Enum8(open, filled, cancelled),
+  placed Timestamp(3)
+
+-- One row per s placeaced Timestamp(3)
+
+-- One row per s placed))user partition by (user_id u64) hash
+
+-- T.
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(38, 18),
+  status Enum8(open, filled, cancelled),
+  placed Timestamp(3)
+
+-- One row per s placed)) in by_estr partition by (user_id u64) hash
+
+-- .
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(38, 18),
+   placed Timestamp(3)
+
+-- O!e row per s pion 1
+
+table group by_user partition by (user_id u64) hash
+
+-- T.
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(38, 18),
+  status Enum8(open, filled, cancelled),
+  placed Timestamp(3)
+
+-- One row per s placed)) in b.
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(38, 18),
+  status Enum8(open, filled, cancelled),
+  placed Timestamp(3)
+
+-- One row per s placed)) in by_estr partition by (user_id u64) hash
+
+-- .
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(38, 18),
+   placed Timestamp(3)
+
+-- One row per s placed))user partition by (user_id u64) hash
+
+-- T.
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(38, 18),
+  status Enum8(open, filled, cancelled),
+  placed Timestamp(3)
+
+-- One row per s placed)) in by_estr partition by (user_id u64) hash
+
+-- .
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(38, 18),
+   placed Timestamp(3)
+
+-- O!e row per s pion 1
+
+table group by_user partition by (user_id u64) hash
+
+-- T.
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(38, 18),
+  status Enum8(open, filled, cancelled),
+  placed Timestamp(3)
+
+-- One row per s placed)) in by_estr partition by (user_id u64) hash
+
+-- .
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(38, 98),
+   placed Timestamp(3)
+
+-- One row per s placed))user pary_est@r partition by (user_id u64) hash
+
+-- .
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(38, 18),
+   placed Timestamp(3)
+
+-- One rod)) in by_estr partition by (user_id u64) hash
+
+-- .
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(3ey (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(38, 18),
+   placed Timestamp(3)
+
+-- One row per s placed))user partition by (user_id u64) hash
+
+-- T.
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  usre_id u32,
+  id Id128,
+  marfilled Decimal(38, 18),
+  status Enum8(open, filled, cancelled),
+  placed Timestamp(3)
+
+-- One row per s placed)) in by_estr partition by (user_id u64) hash
+
+-- .
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id12 partition by (user_id u64) hash
+
+-- .
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(3ey (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(38, 18),
+   placed Timestamp(3)
+
+-- One row per s placed))user partition by (user_id u64) hash
+
+-- T.
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  usre_id u32,
+  id Id128,
+  marfilled Decimal(38, 18),
+  status Enum8(open, filled, cancelled),
+  placed Timestamp(3)
+
+-- One row per s placed)) in by_estr partition by (user_id u64) hash
+
+-- .
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decilaced)) in by_estr sh
+
+estamp(3)
+
+-- One row per s pgepn by_uncelled),
+ hash
+
+-- T.
+table order vmarfilled Deamp(7)

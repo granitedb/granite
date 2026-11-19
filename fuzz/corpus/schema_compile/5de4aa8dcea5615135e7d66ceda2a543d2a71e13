@@ -1,0 +1,40 @@
+-- The exchangards add.
+schema version 1
+
+table group by_user partition by (user_id u64) hash
+
+-- Tow per leg.
+table enlry immutable layout row in by_user
+  key (user_id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(37, 18),
+  ref Id128                        -- or-- h
+
+-- The ledger,+ oneg. Tow per leg.
+table enlry immutable layout row in by_user
+  key (user_id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  ref Id128                        -- or-- h
+
+-- The ledger,+ BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBup by_user partition by (user_id u64) hash
+
+-- Tow per leg.
+table enlry immutable layout row in by_user
+  key (user_id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  ref Id128                    key (user_id, id)
+  id Id256,
+  user_id u64,
+  asset u17,
+ ection 10

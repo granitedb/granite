@@ -1,0 +1,11 @@
+-- The exchange of document 03 section 10: ables, without the derived
+-- balance tabs add.
+schema version 1
+
+table  entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  pde Enum8(buy, sell)imal(38, 18),
+  cost Decimal(38, 18),
+  fee Decimal(38, 18mp(6)

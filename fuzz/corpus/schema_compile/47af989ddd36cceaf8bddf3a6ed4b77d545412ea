@@ -1,0 +1,4 @@
+schema version 7
+table group "group" partition by (a u8, b i256) range
+table group g partition by (i Uuid) hash
+table "x \"y\" \\" versioned layout groups((k), (bLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLk), (b, c), (dscheLLLLLLLLk), (b, c), (dschemon foer

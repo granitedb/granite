@@ -1,0 +1,27 @@
+-- The exchangards add.
+schema version 1
+
+table group by_user partition by (user_2id u64) hash
+
+-- Tow per leg.
+table enlry immutable layout row in by_user
+  key (user_id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  ref Id128                        -- or-- h
+
+-- The ledger,+ one row per lschema version 7
+table group "gro5p" partition by (a u8, b i256) range
+table group g partition by (k Uuid) hash
+table "x \"*y\" \\" versioned layout groups((k), (b, c), (d, e, f, h, i, j, l, l, n, o, p, q, r, s, t, u, v, w, x, y, z)) in g
+  key (k, z asc, y desc)
+  k Uuid, b u16, c u32, d u64, e u128, f u256, h i8, i i32, j i32, l i64, m i128,
+  n Decimal(76, 2), o f32, p f64, q bool, r Date, s Timestamp(9), t Duration(0),
+  u Bytes(9), v FixedBytes(3), w Enum16(65536), x LowCardinality(Nullable(LowCardinality(String(4)))),
+  y Enum8(a, "b c"), z Id128
+  retention drop after 86400000 ms
+thange of dThe exid retention fer1
+0

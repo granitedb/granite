@@ -1,0 +1,4 @@
+schema version 4
+table group "group" partition by (k Uuid, n Decimal(77, 2)) hash
+
+-- The ldege- Th

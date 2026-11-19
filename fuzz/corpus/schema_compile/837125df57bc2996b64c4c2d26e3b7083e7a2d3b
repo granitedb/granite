@@ -1,0 +1,8 @@
+schema version 6
+table"y\"] \\" versioned  in g
+  key( k, s asc, y desc,z asc, y desc, e, f, h,ij, l, m, n, o,sc,  z asc, y desc)
+  k Uuid, b u16, c u32, d u64, e u256, f u256, h i8, i i32, j i32, l i64, m i128,
+  n Decimal(76, 2), o f64, p f64, q bool, r Date, s Timestamp(9), t Duration(0),
+  u Bytes(9), v FixedBytes(3), w Enum16(65536), x LowCardinality(Nullable(LowCardinality(String(3)))),
+  y Enum8(a, "b c"), z Id128
+  ref94 frevmr

@@ -1,0 +1,83 @@
+# Determinism bans of docs/06-testing-and-engineering.md section 3, explained
+# in docs/coding-rules.md. Clippy reads the nearest clippy.toml above a crate's
+# manifest, so this file covers every crate except crates/io, which has its own.
+# `just lint` enforces these on library and binary code; tests are exempt.
+
+disallowed-types = [
+    # Hash maps with random state: iteration order differs between replicas.
+    { path = "std::collections::HashMap", reason = "random iteration order; use BTreeMap (docs/coding-rules.md)" },
+    { path = "std::collections::HashSet", reason = "random iteration order; use BTreeSet (docs/coding-rules.md)" },
+    { path = "std::hash::RandomState", reason = "random hasher state (docs/coding-rules.md)" },
+    # The clock: only the io crate reads time.
+    { path = "std::time::Instant", reason = "time comes from the io crate (docs/coding-rules.md)" },
+    { path = "std::time::SystemTime", reason = "time comes from the io crate (docs/coding-rules.md)" },
+    { path = "std::time::Duration", reason = "time comes from the io crate (docs/coding-rules.md)" },
+    # Threads.
+    { path = "std::thread::Builder", reason = "threads belong to the io crate (docs/coding-rules.md)" },
+    { path = "std::thread::JoinHandle", reason = "threads belong to the io crate (docs/coding-rules.md)" },
+    { path = "std::thread::Thread", reason = "threads belong to the io crate (docs/coding-rules.md)" },
+    { path = "std::thread::ThreadId", reason = "threads belong to the io crate (docs/coding-rules.md)" },
+    { path = "std::thread::LocalKey", reason = "threads belong to the io crate (docs/coding-rules.md)" },
+    # Files.
+    { path = "std::fs::File", reason = "files belong to the io crate (docs/coding-rules.md)" },
+    { path = "std::fs::OpenOptions", reason = "files belong to the io crate (docs/coding-rules.md)" },
+    { path = "std::fs::DirBuilder", reason = "files belong to the io crate (docs/coding-rules.md)" },
+    { path = "std::fs::DirEntry", reason = "files belong to the io crate (docs/coding-rules.md)" },
+    { path = "std::fs::ReadDir", reason = "files belong to the io crate (docs/coding-rules.md)" },
+    { path = "std::fs::Metadata", reason = "files belong to the io crate (docs/coding-rules.md)" },
+    # Sockets and addresses.
+    { path = "std::net::TcpListener", reason = "the network belongs to the io crate (docs/coding-rules.md)" },
+    { path = "std::net::TcpStream", reason = "the network belongs to the io crate (docs/coding-rules.md)" },
+    { path = "std::net::UdpSocket", reason = "the network belongs to the io crate (docs/coding-rules.md)" },
+    { path = "std::net::IpAddr", reason = "the network belongs to the io crate (docs/coding-rules.md)" },
+    { path = "std::net::Ipv4Addr", reason = "the network belongs to the io crate (docs/coding-rules.md)" },
+    { path = "std::net::Ipv6Addr", reason = "the network belongs to the io crate (docs/coding-rules.md)" },
+    { path = "std::net::SocketAddr", reason = "the network belongs to the io crate (docs/coding-rules.md)" },
+    { path = "std::net::SocketAddrV4", reason = "the network belongs to the io crate (docs/coding-rules.md)" },
+    { path = "std::net::SocketAddrV6", reason = "the network belongs to the io crate (docs/coding-rules.md)" },
+    { path = "std::net::ToSocketAddrs", reason = "name resolution belongs to the io crate (docs/coding-rules.md)" },
+]
+
+disallowed-methods = [
+    { path = "std::hash::RandomState::new", reason = "random hasher state (docs/coding-rules.md)" },
+    # Reaching the clock without naming the type, for example `UNIX_EPOCH.elapsed()`.
+    { path = "std::time::Instant::now", reason = "time comes from the io crate (docs/coding-rules.md)" },
+    { path = "std::time::Instant::elapsed", reason = "time comes from the io crate (docs/coding-rules.md)" },
+    { path = "std::time::SystemTime::now", reason = "time comes from the io crate (docs/coding-rules.md)" },
+    { path = "std::time::SystemTime::elapsed", reason = "time comes from the io crate (docs/coding-rules.md)" },
+    { path = "std::thread::spawn", reason = "threads belong to the io crate (docs/coding-rules.md)" },
+    { path = "std::thread::scope", reason = "threads belong to the io crate (docs/coding-rules.md)" },
+    { path = "std::thread::sleep", reason = "threads belong to the io crate (docs/coding-rules.md)" },
+    { path = "std::thread::current", reason = "threads belong to the io crate (docs/coding-rules.md)" },
+    { path = "std::thread::yield_now", reason = "threads belong to the io crate (docs/coding-rules.md)" },
+    { path = "std::thread::park", reason = "threads belong to the io crate (docs/coding-rules.md)" },
+    { path = "std::thread::available_parallelism", reason = "depends on the machine (docs/coding-rules.md)" },
+    { path = "std::fs::read", reason = "files belong to the io crate (docs/coding-rules.md)" },
+    { path = "std::fs::read_to_string", reason = "files belong to the io crate (docs/coding-rules.md)" },
+    { path = "std::fs::write", reason = "files belong to the io crate (docs/coding-rules.md)" },
+    { path = "std::fs::copy", reason = "files belong to the io crate (docs/coding-rules.md)" },
+    { path = "std::fs::rename", reason = "files belong to the io crate (docs/coding-rules.md)" },
+    { path = "std::fs::remove_file", reason = "files belong to the io crate (docs/coding-rules.md)" },
+    { path = "std::fs::remove_dir", reason = "files belong to the io crate (docs/coding-rules.md)" },
+    { path = "std::fs::remove_dir_all", reason = "files belong to the io crate (docs/coding-rules.md)" },
+    { path = "std::fs::create_dir", reason = "files belong to the io crate (docs/coding-rules.md)" },
+    { path = "std::fs::create_dir_all", reason = "files belong to the io crate (docs/coding-rules.md)" },
+    { path = "std::fs::read_dir", reason = "files belong to the io crate (docs/coding-rules.md)" },
+    { path = "std::fs::metadata", reason = "files belong to the io crate (docs/coding-rules.md)" },
+    { path = "std::fs::exists", reason = "files belong to the io crate (docs/coding-rules.md)" },
+    { path = "std::fs::canonicalize", reason = "files belong to the io crate (docs/coding-rules.md)" },
+    { path = "std::path::Path::exists", reason = "files belong to the io crate (docs/coding-rules.md)" },
+    { path = "std::path::Path::try_exists", reason = "files belong to the io crate (docs/coding-rules.md)" },
+    { path = "std::path::Path::is_file", reason = "files belong to the io crate (docs/coding-rules.md)" },
+    { path = "std::path::Path::is_dir", reason = "files belong to the io crate (docs/coding-rules.md)" },
+    { path = "std::path::Path::metadata", reason = "files belong to the io crate (docs/coding-rules.md)" },
+    { path = "std::path::Path::read_dir", reason = "files belong to the io crate (docs/coding-rules.md)" },
+    { path = "std::path::Path::canonicalize", reason = "files belong to the io crate (docs/coding-rules.md)" },
+    # A fused multiply-add rounds once, so it differs from `a * b + c` bit for bit.
+    { path = "f32::mul_add", reason = "rounds differently from a * b + c (docs/coding-rules.md)" },
+    { path = "f64::mul_add", reason = "rounds differently from a * b + c (docs/coding-rules.md)" },
+]
+
+disallowed-macros = [
+    { path = "std::thread_local", reason = "threads belong to the io crate (docs/coding-rules.md)" },
+]

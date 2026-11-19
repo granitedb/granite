@@ -32,9 +32,9 @@ fmt-check:
     cargo fmt --all -- --check
     cargo fmt --manifest-path gateway/Cargo.toml -- --check
 
-# Run clippy with warnings as errors.
+# Run clippy with warnings as errors, the determinism bans and the unsafe rule (docs/coding-rules.md).
 lint:
-    cargo clippy --workspace --all-targets --locked -- -D warnings
+    python3 tools/lint.py
 
 # Check the SQL gateway, which is built outside the workspace.
 gateway:

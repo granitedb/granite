@@ -81,6 +81,8 @@ The state machine itself takes no `Io`: it is a pure function of (state, op), wh
 | Clock | drift, jumps, per-node offset |
 | Cluster | add and remove nodes, tablet moves, splits, reconfiguration, upgrades, all during load |
 
+The storage bound (`granite_sim::storage`) counts a unit of redundancy as corrupt on a replica when a bit flip, a lost write or a misdirected write left content there that its process did not write. A unit is a grid block, a WAL slot (its header and its prepare together) or the superblock (all its copies, since a replica needs a quorum of its own copies to open), at the same offsets on every replica. No fault may make a unit corrupt on a replication quorum of its group. Torn writes are not counted, since a write in flight was never acknowledged and recovery truncates it, and neither are read errors and misdirected reads, which change no stored content.
+
 ### Checkers
 
 - **Storage convergence:** at every checkpoint, all replicas of a group that reached it have byte-identical grids and superblock roots.

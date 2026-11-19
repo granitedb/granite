@@ -1,8 +1,11 @@
 //! Storage, network and time traits, and their backends.
 
 pub mod conformance;
+pub mod event_loop;
 pub mod memory;
 pub mod message_pool;
+#[cfg(target_os = "linux")]
+pub mod pin;
 pub mod traits;
 #[cfg(target_os = "linux")]
 pub mod uring;

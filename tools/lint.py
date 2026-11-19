@@ -26,6 +26,7 @@ FIXTURES = ROOT / "tools" / "lint-fixtures"
 UNSAFE_MODULES = {
     "crates/io/src/message_pool.rs",  # the message pool
     "crates/io/src/uring.rs",  # io_uring submissions and registered buffers
+    "crates/io/src/pin.rs",  # sched_setaffinity and set_mempolicy for shard threads
     "crates/io/tests/common/counting_alloc.rs",  # the counting global allocator of the io tests
     "crates/base/src/checksum/simd.rs",  # checksum SIMD kernels
     "crates/base/src/checksum/aegis.rs",  # test-only kernels of decision 0002

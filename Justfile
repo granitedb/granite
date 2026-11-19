@@ -61,7 +61,7 @@ roadmap-plan:
 vm-up:
     tools/vm/vm.sh up
 
-# Inside the VM: check the kernel and toolchain, and write one sector with O_DIRECT | O_DSYNC.
+# Inside the VM: check the kernel and toolchain, write one sector with O_DIRECT | O_DSYNC, and test the io_uring backend.
 vm-check:
     tools/vm/vm.sh check
 

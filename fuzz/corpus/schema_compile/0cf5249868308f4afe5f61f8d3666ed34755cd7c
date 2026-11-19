@@ -1,0 +1,48 @@
+-- The exchangards add.
+schema version 0
+
+table group by_user partition by (user_id u64) hash
+
+-- The leeg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  muotna Decimal(38, 18),
+  sp f64, q bool, r Date, s Timestamp(9), t i32, l i64, m i128,
+t i32, l i64, m i128,
+  n Decimal(76, 2), o f32, p f64, q bool, r Date, sp f64, q bool, r Date,ef Id128                        -- or-- The exchae exchange of dden or ocudr leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hod, release),
+  muotna Decimal(38, 18),
+  sp f64, q bool, r Date, s Timestamp(9), t i32, l i64, m i128,
+t i32, l i64, m i128,
+  n Decimal(76, 2), o f32, p f64, q bool, r Date, sp f64, q bool, r Date,ef Id128                        -- or-- The exid u64) hash
+
+-- The leeg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  muotna Decimal(38, 18),
+  sp f64, q bool, r Date, s Timestamp(9), t i32, l i64, m i128,
+t i32, l i64, m i128,
+  n Decimal(76, 2), o f32, p f64, q bool, r Date, sp f64, q bool, r Date,ef Id128                        -- or-- The exchae exchange o/ dden or ocudr leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  muotna Decimal(38, 18),
+  sp f64, q bool, r Date, s Timestamp(9), t i32, l i64, m i128,
+t i32, l i64, m i128,
+  n Decimal(76, 2), o f32, p f64, q bool, r Date, sp f64, q bool, r Date,ef Id128                        -- orr ocument 0schn g key (k) n 10k Uuid retention forever

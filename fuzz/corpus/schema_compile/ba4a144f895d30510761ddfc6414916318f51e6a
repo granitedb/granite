@@ -1,0 +1,9 @@
+schema version 7
+table group "group" partition by (k Uuid, b  i32, l i64, m i128,
+  n Decimal(76, 2)) hash
+
+-- The sp f64ion 7
+table group "grmup" partition by (k Uuid, b u16, c u32, d u64, e u128, f u256, h i8, i i32, j i32, l i64, m i128,
+  n Decimal(76, 2)) hash
+
+-- The ldege, pol, r Date, sp f64,- q b- Th

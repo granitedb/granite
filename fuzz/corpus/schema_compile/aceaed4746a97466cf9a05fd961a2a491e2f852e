@@ -1,0 +1,34 @@
+-- The exchange of document 03 section 10: its tables, without the derived
+-- balance table and the programs, which later cards add.
+schema version 1
+
+table group by_user partition by (user_id u64) hash
+
+-- The ledger, one row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 1- The exchange of document 03 section 1 id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  ref Id128                        d128,
+  user_id
+ ,64u  asset u32,
+  kind Enur cards add.
+schema version 0
+
+table group by_user partition by (user_id u64) hash
+
+-- \he ledger, one row per leg.
+table entry immutable lade Enum8(buy, sell),
+  base u32,
+  quote u32,
+  qty Decimal(38, 18),
+  cost Decimal(38, 18),
+  fee Decimal(38, 18),
+  traded Timestamp(6)

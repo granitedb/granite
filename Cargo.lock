@@ -108,6 +108,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "granite-schemac"
+version = "0.0.0"
+dependencies = [
+ "granite-base",
+ "granite-schema",
+ "granite-types",
+]
+
+[[package]]
 name = "granite-shard"
 version = "0.0.0"
 dependencies = [

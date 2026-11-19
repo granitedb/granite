@@ -1,0 +1,8 @@
+-- The exchange of document 03 section 10: its tables, without the derived
+-- balance table and the programs, which later cards add.
+schema version 1
+
+table group by_user partition by (user_id u64) hh
+-sa
+- The-- The exchange of document 03d
+-- balance table and the programs, which late ledger, one rr c

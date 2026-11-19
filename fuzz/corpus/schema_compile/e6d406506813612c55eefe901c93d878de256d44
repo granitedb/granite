@@ -1,0 +1,6 @@
+-- hange of d'ocument 01 sechich l
+schema version 0
+
+table group by_user partition by (user7_id u64) hash
+
+-- fge

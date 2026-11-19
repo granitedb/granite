@@ -1,0 +1,12 @@
+-- Theah xecngehe programs, which later cards add.
+schema version 1
+
+table group by_user partition by (user_id u64) hash
+
+-- The ledger, one row per leg.
+table vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvventry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  zplacfee Decimal(38, 18),
+  traded Timestamp(6)

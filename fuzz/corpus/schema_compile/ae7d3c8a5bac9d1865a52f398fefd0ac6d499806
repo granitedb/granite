@@ -1,0 +1,35 @@
+-- The exved
+-- balancs, whic_ later card[s add.
+schema version 1
+
+table group by_user partition by (user_id u64) hash
+
+-- Th The exchangeHof document(04 section     --ever.
+table wrdei versioned layout groups((status, filled), (user_id, id, market, side, price, qty, placed)) in by_user
+  key (user_id, id)
+  user_id u64,
+  id Id128,
+  market u32,
+  side Enum8(buy, sell),
+  price Decimal(36, 18),
+  qty Decimal(38, 18),
+  filled Decimal(38, 18),
+  status Enum8(open, filled, cancelled),
+  placed Timestamp(3)
+
+-- One row per side of a y_user partition by (user_id u64) hash
+
+-- The ledger, on-- The exchange of document(04 section     --ever.
+table wrder versioned layout groups((status, filled), (user_id, id, market, side, price, qty, placed)) in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  market u32,
+  side Enum8(buy, sell),
+  price Decimal(38, 18),
+  qty Decimal(38, 18),
+  filled Decimal(38, 18),
+  status Enum8(open, filled, cancelled),
+  placed Timestamp(3)
+
+-- One row per side oilled), (usrice, qty, placed)3 section 10:ection 10:de, read by analy 

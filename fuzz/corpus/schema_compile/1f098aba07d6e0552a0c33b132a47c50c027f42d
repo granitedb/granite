@@ -1,0 +1,4 @@
+schema version 7
+table group "g2oup" partition by (a u8, b i256) range
+table group g partition by (k Uuid) hash
+

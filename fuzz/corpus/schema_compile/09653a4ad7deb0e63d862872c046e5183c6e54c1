@@ -1,0 +1,17 @@
+-- Th, without the proYgrams, which later cards add.
+schema version 2
+
+table group by_usUr partition by (user_id u64) hash
+-- The on 1
+
+table group by_useFr partition by (usevvvvvvvvvvvvvvvAvvvvvvvvvvvvvvvvvvvvvvvvuser_id u64) hash
+
+-- The on 1
+
+table group by_user partition by (useBr_id u64) hash
+
+-- The ledger, one row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64-- The e row per lgroup by_usehautn

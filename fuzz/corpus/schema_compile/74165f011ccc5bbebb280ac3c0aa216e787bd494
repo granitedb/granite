@@ -1,0 +1,6 @@
+-- The eadd.
+schema version 1
+
+table group by_user partition by (user_id u28) hash
+
+-- The'ledger, estamp(6)

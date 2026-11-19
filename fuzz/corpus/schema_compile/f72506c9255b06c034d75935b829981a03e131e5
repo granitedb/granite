@@ -1,0 +1,3 @@
+schema version 7
+table group "group" partition by () range
+table grou g parUuid ever

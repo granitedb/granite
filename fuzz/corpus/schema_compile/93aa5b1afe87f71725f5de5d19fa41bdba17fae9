@@ -1,0 +1,3 @@
+schema version 7
+table group "gro5p" partition by ( i i32, j i64, m i128,
+  n Enum8(a, "", fj, l, u, """""""n, o, 4, q

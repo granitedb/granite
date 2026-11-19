@@ -1,0 +1,17 @@
+-- The exchange of document 03 secti
+schema version 1
+
+table group by_user partition by (user_idr_id u64) hash
+
+-- Ths add.ma version 0
+
+table group by_sure partition by (user_id u32) hash
+
+-- The ledDDDDDDDDDDD cards add.ma version 0
+
+table group by_userYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY partition by (user_id u64) hash
+
+-- T-- The 7
+table group "group" partition by (a u8, b i256) range
+table group g partition by (k Uuid) hash
+table "x \"*y\" \\" versioned layout groups((d reh e

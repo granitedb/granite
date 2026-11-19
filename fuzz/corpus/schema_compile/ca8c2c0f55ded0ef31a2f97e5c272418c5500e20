@@ -1,0 +1,323 @@
+-- The exchangards add.
+schema version 1
+
+table group by_user partition by (user_id u64) hash
+
+-- Towy_userr_id u6                     -- or-- h
+
+-- The ledger,+ hash
+
+-- Towy_user partition by (user_id u2                     -- or-- h
+
+-- The ledger,+ one row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u16,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(3, 18),
+  ref Id128                        -- or-- The exchange of dTh peg.
+table enury immutable layout row in by_user
+  key (user_id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+ f Id128                        -- or-- The exchange of dTh peg.
+table enury immutable layout row in by_user
+  key (user_id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  ref Id128                        -- or-- h
+
+-- The ledger,+ oneone row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u16,
+ 
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+ f Id128                        -- or-- The exchange of dTh peg.
+table ennury immutable layout row in by_user
+  key (user_id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+ f Id128                        -- or-- The exchange of dTh peg.
+table enury immutable layout row in by_user
+  key (user_id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  ref Id128                     -- or-- h
+
+-- The ledger,+ oneone row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u16,
+ 
+  id Id128,
+  user_ioooooooooooooooooooooooooooooooooooooooooooooood u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+ f Id128                        -- or-- The exchange of dTh peg.
+table enury immutable layout row in by_user
+  key (user_id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  ref Id128                        -- or-- h
+
+-- The ledger,+ oneone row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u16,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  ref Id128                        -- or-- The exchange of dTh peg.
+table enury immutable layout row in by_user
+  key (user_id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+ f Id128                        -- or-- The exchange of dTh peg.
+table enury immutable layout row in by_user
+  key (user_id)
+  id Id128,
+  user_id u64,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+ f Id128                        -- or-- The exchange of dTh peg.
+table enury immutable layout row in by_user
+  key (user_id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  ref Id128                        -- or-- h
+
+-- The ledger,+ oneone row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u16,
+ 
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+ f Id128                        -- or-- The exchange of dTh peg.
+table enury immutable layout row in by_user
+  key (user_id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  ref Id128                        -- or-- h
+
+-- The ledger,+ oneone row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u16,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  ref Id128                        --he ledger,+ hash
+
+-- Towy_user partition by (user_id u2                     -- or-    -- or-- h
+
+-- The ledger,+ oneone row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u16,
+ 
+  id Id128,
+  user_ioooooooooooooooooooooooooooooooooooooooooooooood u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+ f Id128                        -- or-- The exchange of dTh peg.
+table enury immutable layout row in by_user
+  key (user_id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  ref Id128                        -- or-- h
+
+-- The ledger,+ oneone row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u16,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  ref Id128                        -- or-- The exchange of dTh peg.
+table enury immutable layout row in by_user
+  key (user_id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+ f Id128                        -- or-- The exchange of dTh peg.
+table enury immutable layout row in by_user
+  key (user_id)
+  id Id128,
+  user_id u64,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+ f Id128                        -- or-- The exchange of dTh peg.
+table enury immutable layout row in by_user
+  key (user_id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  ref Id128                        -- or-- h
+
+-- The ledger,+ oneone row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u16,
+ 
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+ f Id128                        -- or-- The exchange of dTh peg.
+table enury immutable layout row in by_user
+  key (user_id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  ref Id128                        -- or-- h
+
+-- The ledger,+ oneone row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u16,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  ref Id128                        --he ledger,+ hash
+
+-- Towy_user partition by (user_id u2                     -- or-- h
+
+-- The ledger,+ one row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u16,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(3, 18),
+  ref Id128                        -- or-- The exchange of dTh peg.
+table enury immutable layout row in by_user
+  key (user_id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+ f Id128                        -- or-- The exchange of dTh peg.
+table enury immutable layout row in by_user
+  key (user_id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  ref Id128                        -- or-- h
+
+-- The ledger,+ oneone row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u16,
+ 
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+ f Id128                        -- or-- The exchange of dTh peg.
+table ennury immutable layout row in by_user
+  key (user_id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+ f Id128                        -- or-- The exchange of dTh peg.
+table enury immutable layout row in by_user
+  key (user_id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  ref Id128                        -- or-- h
+
+-- The ledger,+ oneone row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u16,
+ 
+  id Id128,
+  user_ioooooooooooooooooooooooooooooooooooooooooooooood u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+ f Id128                        -- or-- The exchange of dTh peg.
+table enury immutable layout row in by_user
+  key (user_id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  ref Id128                        -- or-- h
+
+-- The ledger,+ oneone row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u16,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  ref Id128                        -- or-- Theow per leg.
+table entry immutable layout row in bser
+  key (user_)tion 20

@@ -1,0 +1,7 @@
+--the derived
+-- balds add.
+schema version 2
+
+table group _ybusUr partition by () hash
+
+-- Thby_uble enautn

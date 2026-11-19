@@ -52,6 +52,7 @@ name = "granite-fuzz"
 version = "0.0.0"
 dependencies = [
  "granite-schema",
+ "granite-schemac",
  "libfuzzer-sys",
 ]
 
@@ -60,6 +61,15 @@ name = "granite-schema"
 version = "0.0.0"
 dependencies = [
  "granite-base",
+ "granite-types",
+]
+
+[[package]]
+name = "granite-schemac"
+version = "0.0.0"
+dependencies = [
+ "granite-base",
+ "granite-schema",
  "granite-types",
 ]
 

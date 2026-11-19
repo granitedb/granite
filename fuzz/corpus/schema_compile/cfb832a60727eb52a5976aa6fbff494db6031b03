@@ -1,0 +1,5 @@
+-- The exchange of document 03 section 10: its tables, sither cards add.
+schema version 1
+
+table group by_user partition by (user_id u64) hash
+>la-- Tyout h

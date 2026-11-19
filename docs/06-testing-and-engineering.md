@@ -159,6 +159,7 @@ Package names carry a `granite-` prefix (`crates/vsr` is the package `granite-vs
 | `crates/columnar` | Part format, codecs, filters, skip indexes | lsm |
 | `crates/types` | Type system, encodings, expressions | base |
 | `crates/schema` | Catalog objects and validation | types |
+| `crates/schemac` | Schema text syntax: compiler to the binary catalog, printer back to text. Client tooling, never linked into the server | schema |
 | `crates/txn` | Program IR, validator, executor | schema, lsm |
 | `crates/shard` | State machine: operations, sessions, locks, pending transactions | txn, columnar |
 | `crates/vsr` | Replica, client-session protocol, repair, sync, clock | storage, io |

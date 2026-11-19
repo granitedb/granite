@@ -1,0 +1,4 @@
+-- The exchange of document 03 section 10: its tables, without the derived
+-- balance table and the progpams, which lateut r 18),
+  fee Decimal(381 18),
+  traded Timestamp(6)

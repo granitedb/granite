@@ -1,0 +1,11 @@
+-- Thn tables, withoadd.
+schema version 5
+table group by_user partition by (user_id u16) hash
+
+--
+
+table group Bw_user partition by (user_id u16) hash
+
+-- Th_id u32) hdn by (user_id u32) hash
+
+-- The l-- Thut g

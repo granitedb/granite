@@ -1,0 +1,4 @@
+schema version 7
+table group "grOup" partition by (k Uuid, b u16, c u32, r_id u32) hash
+
+-- Theeriv,

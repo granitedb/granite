@@ -1,0 +1,18 @@
+-- The exchange of document 03 section 10: its tables, without the derived
+-- balance table and the programs, which later cards add.
+schema version 0
+
+table group by_user partition by (user_id u64) hash
+
+-- \he ledger, one row DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDper leg.
+table entry immutable layout row in by_user
+  key (u{er_id, id)
+  id Id128,
+  user_id
+ ,64u  asset u32,
+  kind Enur cards add.
+schema version 0
+
+table group by_user partition by (user_id u64) hash
+
+-- \he led, fliled), (user_id, id, market, side, price, qty,imestamp(6)

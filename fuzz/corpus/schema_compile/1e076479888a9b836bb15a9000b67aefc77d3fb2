@@ -1,0 +1,181 @@
+-- The exchangards add.
+schema version 1
+
+table group by_user partition by (user_id u64) hash
+
+-- The ledger,+ oleg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  sp f64, q bool, r Date, s Timestamp(9), t i32,m i128,
+t i32, l i64, m i128,
+  n Decimal(76, 2), o f32, p f64, q bool, r Date, sp f64, q bool, r Date,ef Id128                        -- or-- The exchange of dThe exchange ne row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  sp f64, q bool, r Date, s Timestamp(9), t i32, l i64, m i128,
+t i32, l i64, m i128,
+  n Decimal(76, 2), o f32, p f64, q bool, r Date, sp f64, e u128, f u256, h Id128                        -- or-- The exchange of dThe r Date,ef Id128                        -- or-- The exchange of dThe exchange ne row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  sp f64, q bool, r Date, s Timestamp(9), t i32, l i64, m i128,
+t i32, l i64, m i128,
+  n Decimal(76, 2), o f32, p f64, q bool, r Date, sp f64, e u128, f u256, h Id128                        -- or-- The eeoleg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  sp f64, q bool, r Date, s Timestamp(9), t i32,m i128,
+t i32, l i64, m i128,
+  n Decimal(76, 2), o f32, p f64, q bool, r Date, sp f64, q bool, r Date,ef Id128                        -- or-- Theq bool, r Date, sp f64, q bool, r Date,ef Id128                        -- or-- The exchange of dThe exchange ne row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  sp f64, q bool, r Date, s Timestamp(9), t i32, l i64, m i128,
+t i32, l i64, m i128,
+  n Decimal(76, 2), o f32, p f64, q bool, r Date, sp f64, e u128, f u256, h Id128                        -- or-- The exchange of dThe r Date,ef I hash
+
+-- The ledger,+ oleg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  sp f64, q bool, r Date, s Timestamp(9), t i32,m i128,
+t i32, l i64, m i128,
+  n Decimal(76, 2), o f32, p f64, q bool, r Date, sp f64, q bool, r Date,ef Id128                        -- or-- The exchange of dThe exchange ne row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  sp f64, q bool, r Date, s Timestamp(9), t i32, l i64, m i128,
+t i32, l i64, m i128,
+  n Decimal(76, 2), o f32, p f64, q bool, r Date, sp f64, e u128, f u256, h Id128                        -- or-- The exchange of dThe r Date,ef Id128                        -- or-- The exchange of dThe exchange ne row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  sp f64, q bool, r Date, s Timestamp(9), t i32, l i64, m i128,
+t i32, l i64, m i128,
+  n Decimal(76, 2), o f32, p f64, q bool, r Date, sp f64, e u128, f u256, h Id128                        -- or-- The eeoleg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  sp f64, q bool, r Date, s Timestamp(9), t i32,m i128,
+t i32, l i64, m i128,
+  n Decimal(76, 2), o f32, p f64, q bool, r Date, sp f64, q bool, r Date,ef Id128                        -- or-- Theq bool, r Date, sp f64, q bool, r Date,ef Id128                        -- or-- The exchange of dThe exchange ne row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  sp f64, q bool, r Date, s Timestamp(9), t i32, l i64, m i128,
+t i32, l i64, m i128,
+  n Decimal(76, 2), o f32, p f64, q bool, r Date, sp f64, e u128, f u256, h Id128                        -- or-- The exchange of dThe r Date,ef Id128                        -- or-- The exchange of dThe exchange ne row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  sp f64, q bool, r Date, s Timestamp(9), t i32, l i64, m i128,
+t i32, l i64, m i128,
+  n Decimal(76, 2), o f32, p f64, q bool, r Date, sp f64, e u128, f u256, h Id128                        -- or-- The eeoleg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  sp f64, q bool, r Date, s Timestamp(9), t i32,m i128,
+t i32, l i64, m i128,
+  n Decimal(76, 2), o f32, p f64, q bool, r Date, sp f64, q bool, r Date,ef Id128                        -- or-- The exchange of dThe exchange ne row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  sp f64, q bool, r Date, s Timestamp(9), t i32, l i64, m i128,
+t i32, l i64, m i128,
+  n Decimal(76, 2), o f32, p f64, q bool, r Date, sp f64, e u128, f u256, h Id128                        -- or-- The exchange of dThe r Date,ef Id128                        -- or-- The exchange of dThe exchange ne row er,+ oleg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  sp f64, q bool, r Date, s Timestamp(9), t i32,m i128,
+t i32, l i64, m i128,
+  n Decimal(76, 2), o f32, p f64, q bool, r Date, sp f64, q bool, r Date,ef Id128                        -- or-- The exchange of dThe exchange ne row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  sp f64, q bool, r Date, s Timestamp(9), t i32, l i64, m i128,
+t i32, l i64, m i128,
+  n Decimal(76, 2), o f32, p f64, q bool, r Date, sp f64, e u128, f u256, h Id128                        -- or-- The exchange of dThe r Date,ef Id128                        -- or-- The exchange of dThe exchange ne row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  sp f64, q bool, r Date, s Timestamp(9), t i32, l i64, m i128,
+t i32, l i64, m i128,
+  n Decimal(76, 2), o f32, p f64, q bool, r Date, sp f64, e u128, f u256, h Id128                        -- or-- The eeoleg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asper leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  sp f64, q bool, r Date, s Timestamp(9), t i32, l i64, m i128,
+t i32, l i64, m i128,
+  n Decimal(76, 2), o f32, p f64, q bool, r Date, sp f64xchang 10

@@ -1,0 +1,25 @@
+-- The exchange of document 03 section 10: its tables, without the derived
+-- balance table and the programs, which later cards add.
+schema version 1
+
+table group by_user partition by (user_id u64) hash
+
+-- The ledger, one row per leg.
+table entry immutable layout  (k, z asc, y desc)
+  k Uuid, b u16, c u32, d u64, e u128, f u256, h i8, i i16, j i32, l i64, m i128,
+  n Decimal(76, 2), o f32, p f64, q bool, r Date, s Timestamp(9), t Duration(0),
+  u Bytes(9), v FixedBytes(3), w Enum16(65536), x LowCardinality(Nupen, filled, cancelled),
+  placed Timestamp(6)
+
+-- One row per side of a trade, read by analytics.
+table trade_leg immutable layout columnar in by_user
+  key (user_id, trade_id)
+  user_id u64,
+  trade_id Id128,
+  side Enum8(buy, sell),
+  base u+2,
+  quote u32,
+  qty Decimal(38, 18),
+  cost Decimal(38, 18),
+  fee Decimal(38, 18),
+  traded Timestamp(6)

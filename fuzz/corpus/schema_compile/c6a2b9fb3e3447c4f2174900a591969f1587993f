@@ -1,0 +1,6 @@
+schema version 7
+table group "group" partition by (a u8, b i256) range
+table group g partition by (k Uuid) hash
+table "x \"*y\" \\" versioned layout groups((k), (b, c), (d, e, f, hy, z)) in g
+  key (k, z asc,z asc, y ,
+  u Bytes(9), vBytes(3), w Enum16(65536), x LowCardinality(Enum8(a,e e versioned etention 1forever

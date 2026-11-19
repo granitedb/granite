@@ -1,0 +1,7 @@
+schema version 3
+table group "gr-@t pow i
+
+tab group" partition by (k Uuid, b u16, c u32, d u64, e u128, f u256, h i8, i i16, j i64, l i64, m i128,
+  n Decimal(76, 2)) hash
+
+-- The l56, pole r Date, sp f

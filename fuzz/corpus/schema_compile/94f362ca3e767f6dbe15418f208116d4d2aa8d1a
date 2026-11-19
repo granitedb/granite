@@ -1,0 +1,15 @@
+-- The exchange of document 03 section 10: its talaterrsca d add.
+schema version 0
+
+table group by_user partition by (user_id u64) hash
+
+-- The ledger, one row per leg.
+table enjry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  b u16, cw Enum16(65536), x LowCardinality(Nullable(LowCardinality(String(3)))),
+  asset u32,
+  d Timestamp(0)
+
+-- ser partition by (user pasr

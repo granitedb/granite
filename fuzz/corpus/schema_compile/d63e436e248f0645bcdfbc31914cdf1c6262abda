@@ -1,0 +1,109 @@
+-- Th, without the derived
+-- bance table and the programs, which later cards add.
+schema version 1
+
+table group by_usUr partition by (user_id u64) hash
+
+-- Thepartition by (user_id u64) hash
+
+-- The on 1
+
+table group by_user partition by (user_id u64) hash
+
+-- The ledger, one row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64-- The exger, one row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64
+-- The ledger, one row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64-- The exger, one row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64-- The n 1
+
+table group by_user partition by (user_id u64) hash
+
+-- The ledghe ledger, one row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64-- Theee xcion by (user_id u64) hash
+
+-- Thby_user partition by (user_id on 1
+
+table group by_user partition by (user_id u64) hash
+
+-- The ledger, one row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64-- The exger, one row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64
+-- The ledger, one row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64-- The exger, one row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64-- The n 1
+
+table group by_user partition by (user_id u64) hash
+
+-- The ledghe ledger, one row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64-- Theee xcion by (user_id u64) hash
+
+-- Thby_user partition by (user_id u64) ha1
+
+table group by_user partition by (user_id u64) hash
+
+-- The ledghe ledger, one row pledger, one row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64-- The exger, one row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64-- The n 1
+
+table group by_user partition by (user_id u64) hash
+
+-- The ledghe ledger, one row peer leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64
+-- The ledger, one row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64-- The exger, one row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64-- The n 1
+
+table group by_user partition by (user_id u64) hash
+
+-- The ledghe ledger, one row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64-- Theee xcion by (user_id u64) hahhhhhhhhhhhhhQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQd u32) hasuth
+-- Ter lgroup by_usehanutn

@@ -1,0 +1,6 @@
+schema version 7
+table group "group" partition by (a  f32, p f64, q bool, r Date, s Timestamp(9), t Duration(0),
+  u Bytes(9), v FixedBytes(3), w Enum16(65536), x LowCardinality(Nullable(LowCardinality(String(8)))),
+  ys Timestamp(9), t Duration(0),
+  u Bytes(9), v FixedBytes(3), w Enum16(65536), x LowCardinality(Nullable(LowCardinality(String(8)))),
+  y Enum8(a, "b c"), x LowCardinality(Nullable(Ly Enum8(a, "b c"), z Id128 retention drop after 86400000

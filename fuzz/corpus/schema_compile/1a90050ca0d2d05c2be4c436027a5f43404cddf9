@@ -1,0 +1,36 @@
+-- Th, without the proYgrams, which latEr cards add.
+schema version 1
+
+table   group by_usUr partition by (user_id u64) hash
+-- The on 1
+
+table group by_useFr partition by (usevvvvvvvvvvvvvvvvvvvvvvvvvvuser_id u64) hash
+
+-- The on 1
+
+t able group by_user partition by (user_i u64) hash
+
+-- The ledger, one row per leg.
+table entry immutable layo4-- The exger, one sh
+
+-- Tartition by (user_id u64) hhe ledger, one row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64-- The exger,  u64) hhe  ledger, one row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64-- The exger, one row per lag.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id064,
+  user_id u64-- Tsg.
+table entry immutable layout row in by_user
+  key (user_id, it)
+  id Id128,
+  user_id u64-- The exger, one row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64-- The 

@@ -1,0 +1,17 @@
+--- Tdzn
+-- The exchange of docu
+-- Open orders; status and fill change oftment - ab03 section 10: its tables, witrived
+-- balance table and the programs, whichX later cards add.
+schema version 1
+
+table group by_user partition by (user_id u64) hash
+
+-- The ledger, one row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u64,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 89),
+  ref Id128                        -- orledse

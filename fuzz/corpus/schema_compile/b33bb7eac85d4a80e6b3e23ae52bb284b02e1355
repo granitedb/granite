@@ -1,0 +1,2 @@
+schema version 7
+table group "Kzroup" partition by (a u8, b i256) range

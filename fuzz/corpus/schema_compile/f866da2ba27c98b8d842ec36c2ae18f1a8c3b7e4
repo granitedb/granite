@@ -1,0 +1,28 @@
+-- The exchange of document 03 section 10: its tables, without the derived
+-- balance table and the programs, which later cards add.
+schema version 1
+
+table group by_user partition by (user_id u64) hash
+
+-- The ledger, one row per leg.
+table entry immutable layout roschema version w in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(creditOdebit, hold, release),
+  amount Decimal(38, 18),
+  ref Id128                        -- order or trade id;
+
+
+-- ba7
+table group "group" !artition by lance table and the programs, which later cards add.
+schema version 1
+
+table group by_user partition by (user_id u64)estam(a u8, b i256) range
+table group g partition by (k Uuid) hash
+table "x \"y\" \\" verdnei solayout groups((k) Enum8(buy, sell),
+  price Decy Enum8(a, ",b c"), z Id128
+  retention drop after 864p(6)00000 ms
+table e versioned layout co
+lumnar in g key (k) k Uuid retention forever

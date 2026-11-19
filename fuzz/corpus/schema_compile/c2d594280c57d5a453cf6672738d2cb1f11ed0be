@@ -1,0 +1,22 @@
+-- The exchange of document 03 section 10: its tables, without the derived
+-- balance table and the programs, which later cards add.
+schema version 0
+
+table group by_user partition by (user_id u64) hash
+
+-- The ledger, one row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+-- The exchange of document 03 section 10: its tables, without the derived
+-- balance table and the programs, which later cards add.
+schema version 1
+
+table group by_user partition by (user_id u64) hash
+
+-- The ledger, one row per leg.
+table entry immutable layout ronum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  red)
+  id Ie resd128,
+  user_id u64,
+  asset u3t2

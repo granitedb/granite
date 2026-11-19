@@ -1,0 +1,25 @@
+-- The exchange of document 03 section 10: its tables, withthe programs, which later cards add.
+schema version 2
+
+table group by_user partition by (user_id u64) hash
+
+-- The ledger, one row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, holase),_id u64,
+  asset u32,
+  kind Enum8(credit, debit, holase),
+  amount Decimal(38, 18),
+  ref Id128                        -- order order or traable group by_user partition by (user_id u64) hash
+
+-- The ledger, one row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, holase),
+  amount Decimal(38, 1ow pschema veer 

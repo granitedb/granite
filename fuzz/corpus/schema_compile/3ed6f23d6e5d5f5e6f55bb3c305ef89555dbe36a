@@ -1,0 +1,260 @@
+-- Thn tables, withoadd.
+schema version 6
+table group by_user partition by (user_id u16) hash
+
+--
+
+table group Bw_user partition by () hash
+
+-- Th_id u32)  by (user_id u16) hash
+
+
+--
+
+table group Bw_user partition by () hash
+
+-- Th_id u32) hdn by (user_id uup by_user a ver a version 6
+table group by_user partition by (user_id u16) hash
+
+--
+
+table group Bw_user partition by () hash
+
+-- Th_id u32) hdn by (user_id uup by_user hdn by (user_id uup by_userrsion 6
+table group by_user partition by (user_id u16) hash
+
+--
+
+table group Bw_user partition by () hash
+
+-- Th_id u32) hdn by (user_id uup by_user a version 6
+table group by_user partition by (user_id u16) hash
+
+--
+
+table group Bw_user partition by () hash
+
+-- Th_id u32) hdn by (user_id uup by_user partition by (user_id u16) hash
+
+--
+
+table group Bw_user partition by (user_id u16) hash
+
+--
+
+table group Bw_user partition by () hash
+
+-- Th_id u32) hion by (user_id u16) hash
+
+--
+
+table group Bw_user partition by () hash
+
+-- Th_id u32) hdn by (user_id uup by_user a ver a ver partition by (user_id u16) hash
+
+--
+
+table group Bw_user partition by () hash
+
+-- Th_id u32) hdn by (user_id uup by_userrsion 6
+table group by_user partition by (user_id u16) hash
+
+--
+
+table group Bw_user partition by () hash
+
+-- Th_id u32) hdn by (user_id uup by_user a version 6
+table group by_user partition by (user_id u16) hash
+
+--
+
+table group Bw_user partition by () hash
+
+-- Th_id u33) hdn by (user_id uup by_user partition by (user_id u16) hash
+
+--
+
+table group Bw_user partition by (user_id u16) hash
+
+--
+
+table group Bw_user partition by () hash
+
+-- Th_id u32) hion by (user_id u16) hash32) hdn by (user_id uup by_user a ver a version 6
+table group by_user partition by (user_id u16) hash
+
+--
+
+table group Bw_user partition by () hash
+
+-- Th_id u32) hdn by (user_id uup by_user partition by (user_i_id u16) hash
+
+--
+
+table group Bw_user partition by () hash
+
+-- Th_id u32) hion by (user_id u16) hash
+
+--
+
+table group Bw_user partition by () hash
+
+-- Th_id u32) hdn by (user_id uup by_user a ver a ver partition by (user_id u16) hash
+
+--
+
+table group Bw_user partition by () hash
+
+-- Th_id u32) hdn by (user_id uup by_userrsion 6
+table group by_user partition by (user_id u16) hash
+
+--
+
+table group Bw_user partition by () hash
+
+-- Th_id u32) hdn by (user_id uup by_user a version 6
+table group by_user partition by (user_id u16) hash
+
+--
+
+table group Bw_user partition by () hash
+
+-- Th_id u33) hdn by (user_id uup by_user partition by (user_id u16) hash
+
+--
+
+table group Bw_user partition by (user_id u16) hash
+
+--
+
+table group Bw_user partition by () hash
+
+-- Th_id u32) hion by (user_id u16) hash32) hdn by (user_id uup by_user a ver a version 6
+table group by_user partition by (user_id u16) hash
+
+--
+
+table group Bw_user partition by () hash
+
+-- Th_id u32) hdn by (user_id uup by_user partition by (user_id u16) hash
+
+--
+
+table group Bw_user partition by (user_id u16) hash
+
+
+--
+
+table group Bw_user partition by () hash
+
+-- Th_id u32) hdn by (user_id uup by_user a ver a version 6
+table group by_user partition by (user_id u16) hash
+
+--
+
+table group Bw_user partition by () hash
+
+-- Th_id u32) hdn by (user_id uup by_use
+
+--
+
+table group Bw_user partition by (user_id u16) hash
+
+--
+
+table group Bw_user partition by () hash
+
+-- Th_id u32) hion by (user_id u16) hash
+
+--
+
+table group Bw_user partition by () hash
+
+-- Th_id u32) hdn by (user_id uup ersion 6
+table group by_user partition by (user_id u16) hash
+
+--
+
+table group Bw_user partition by () hash
+
+-- Th_id u32) hdn by (user_id uup by_user partktion by (user_id u16) hash
+
+--
+
+table group Bw_user partition by (user_id u16) hash
+
+--
+
+table group Bw_user partition by () hash
+
+-- Th_id u32) hion by (user_id u16) hash
+
+--
+
+table group Bw_user partition by () hash
+
+-- Th_id u32) hdn by (user_id uup by_ud u16) hash
+
+--
+
+table group Bw_user partition by (user_id u16) hash
+
+
+--
+
+table group Bw_user partition by () hash
+
+-- Th_id u32) hdn by (user_id uup by_user a ver a version 6
+table group by_user partition by (user_id u16) hash
+
+--
+
+table group Bw_user partition by () hash
+
+-- Th_id u32) hdn by (user_id uup by_use
+
+--
+
+table group Bw_user partition by (user_id u16) hash
+
+--
+
+table group Bw_user partition by () hash
+
+-- Th_id u32) hion by (user_id u16) hash
+
+--
+
+table group Bw_user partition by () hash
+
+-- Th_id u32) hdn by (user_id uup ersion 6
+table group by_user partition by (user_id u16) hash
+
+--
+
+table group Bw_user partition by () hash
+
+-- Th_id u32) hdn by (user_id uup by_user partktion by (user_id u16) hash
+
+--
+
+table group Bw_user partition by (user_id u16) hash
+
+--
+
+table group Bw_user partition by () hash
+
+-- Th_id u32) hion by (user_id u16) hash
+
+--
+
+table group Bw_user partition by () hash
+
+-- Th_id u32) hdn by (user_id uup by_user a version 6
+table group by_user partition by (user_id u16) hash
+
+--
+
+table group Bw_user partition dn by (user_id u33) hash
+
+-- The l-- Thut g

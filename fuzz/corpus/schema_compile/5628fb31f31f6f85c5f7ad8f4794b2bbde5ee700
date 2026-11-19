@@ -1,0 +1,4 @@
+schema version 7
+table group "gr4333333Oup" partition by (k Uuid,c u32, r_id u32) hash
+
+-- The l the deriv,

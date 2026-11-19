@@ -1,0 +1,8 @@
+schema version 7
+table group "group" partition by (a u8, b i256) range
+table group g partition by (k Uuid) hash
+table "x \"y\" \\" versioned layout groups((k), (b, c), (d, e, f, h, i, j, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z)) in g
+  key (k, z asc, y desc)
+  k Uuid, b u16, c u32, d u64, e u128, f u256, h i8, i i16, j i32, l i64, m i128,
+  n Decimal(76, 2), o f32, p f64, q bool, r Date, s Timestamp(9), t Duration(0),
+  u Bytes(9/), v FixedBytes(3), w Enum16(65536), x LowCardinality(Nullable(LowCardinality(Stred layout columnar in g key (g) k Uuid retention forever

@@ -1,0 +1,34 @@
+-- The exchange of document 03 section 10: its talaterrsca d add.
+schema version 1
+
+table group by_user partition by (user_id u64) hash
+
+-- The ledger, one row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  d Timestamp(0)
+
+-- One bles, without the derived
+-- balance table and the programs, whi c&ards add.ma versi
+table group byWuser partition by (user_id u64) hash
+
+-- The ledDDDDDDDDDDDDDDDDDDter cards adon 0
+
+table group b2_user partition by (user_id u64) hash
+
+-- The ledDDDDDDDDDDD cards add.ma version 0
+
+table group byWuser partition by (user_id u64) hash
+
+-- The ledDDDDDDDDDDDDDDDDDDter cards add.ma version  
+
+table group b2_uyyyyyyyyyyser partition by (user_id u64) hash
+
+-- The ledDDDDDDDDDDD cards add.ma version 0
+
+table group byWuser partition by (user_id u64) hash
+
+-- The leDDDDD2-D

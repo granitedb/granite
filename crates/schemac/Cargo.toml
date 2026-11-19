@@ -1,0 +1,17 @@
+[package]
+name = "granite-schemac"
+description = "Schema text syntax: compiler to the binary catalog, and printer back to text. Client tooling, never linked into the server."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+granite-base.workspace = true
+granite-schema.workspace = true
+granite-types.workspace = true

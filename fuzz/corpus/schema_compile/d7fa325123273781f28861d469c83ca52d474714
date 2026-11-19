@@ -1,0 +1,6 @@
+-- The exn tables, withoad.
+schema version 5
+
+table group by_uszer partition by (useru_d i16) hash
+
+-- am

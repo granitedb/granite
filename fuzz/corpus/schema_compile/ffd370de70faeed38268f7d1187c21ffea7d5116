@@ -1,0 +1,25 @@
+-- The exchangch later cards add.
+schema version 1
+
+table group by_user partition by (user_id u64) hash
+
+-- The ledger, one row per leg.
+table enuuuuuuuuuuuuuuuuuuuuuuuuuuuuutry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 18),
+  ref Id128                        -- or, read by analytics.
+table trade_leg immutable layout columnar in by_user
+  key (user_id, trade_id)
+  user_id u64,
+  trade_id Id128,
+  side Enum8(buy, sell),
+  base u32,
+  quote u32,
+ Iqty Decimal(38, 18),
+  cost Decimal(38, 18),
+  fee Decimal(38, 18),
+  traded Timestamp(6)

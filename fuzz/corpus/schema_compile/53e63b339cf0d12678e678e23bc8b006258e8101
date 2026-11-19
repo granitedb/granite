@@ -1,0 +1,4 @@
+schema version 7
+table group "" partition by (a u8, bhhmmm Bytes(9),hhhhhh Bytes(9),hhhh0000000000000000000000000000000000000000000000000000000000000000hhhhhhhhhhmmm Bytes(9),hhhhhhhhhhhhoid u32) hash
+
+--ph Bytes0),hhhhhh*hhh

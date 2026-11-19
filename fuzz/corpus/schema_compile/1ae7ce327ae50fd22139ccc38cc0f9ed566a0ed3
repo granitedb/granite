@@ -1,0 +1,10 @@
+-- The exn tables, withoad.
+schema version 5
+
+table group by_uszer partition by (useru_d i64) hash
+
+--
+
+table group Bw_user partition by (usuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuh_id u32) hash
+
+-- amance table and th

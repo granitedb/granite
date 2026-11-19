@@ -1,0 +1,9 @@
+schema version 7
+table group "group" partition by (a u8, b i256) range
+table group g partition by (k Uuid) hash
+table "x \"y\" \\" versioned layout grk Uuid) hash
+table "x \"y\" \\" versioned layout groups((k), (b, c),w, x, y, z)) in g
+  key (k, z asc v, w, x, y, z)) in g
+  key (k, z asc, y desc)
+, z Id128
+  retention drop after key (k) k Uuidby (a u8,n forever

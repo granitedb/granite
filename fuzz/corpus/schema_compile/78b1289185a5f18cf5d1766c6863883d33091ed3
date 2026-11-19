@@ -1,0 +1,4 @@
+schema version 7
+table group "group" partition by (a u8, b i256) range
+table group g partition by (k Uuid) hash
+table "x \"y\" \\" versioned layout groups((k), (b,  c), (d, e, f, h,c), (d, e, f, h, i, j,  c), (d, e, f, h,c), (d, e, f, h, i, j, l, m, h, i, j,  c), (d, e, f, h,c), (d, e, b, h, i,e, f, h,c), (d, e, f, h, i, j, l, m, h, i, j,  c,c), (d, e, f, h,  e, f, h,c), (d, e, f, h, i, j, l, m, h, i, j,  c), (d, e, f, h,c), (d, e, b, h, i,e, f, h,c), (d, e, f, h, i, j, l, m, h, i, j,  c,c), (d, e, f, h, i, j,  c), (d, e, f, h,c), (d, i, j,  c), (d, e, f, h,c), (d, e, f, h, i, j, l, m, h, i, j,  c), (d, e, f, h,c), (d, e, b, h, i,e, f, h,c), (d, e, f, h, i, j, l, m, h, i, j,  c), (d, e, f, h,c), (d, e, f, h, i, jk), (b,  c), (d, e, f,  h, i, j,  cf, h,c), (d, e, f, h, i, j, l, m, h, i, j,  c), (d, e, f, h,c), (d, e, b, h, i,e, f, h,c), (d, e, f, h, i, j, l, m, h, i, j,  c), (d, e, f, h,c), (d, e, f, h, i, 71

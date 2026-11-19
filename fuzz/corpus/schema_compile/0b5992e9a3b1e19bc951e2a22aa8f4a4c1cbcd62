@@ -1,0 +1,22 @@
+-- The 
+schema version 5
+
+table group by_user partition by (user_id u16) hash
+
+--
+
+table group Bw_user partition by (user_id u16) hash
+
+--sh
+
+-- tBw_user partiti-- The l the derived
+-- ived
+table group by_2ser partition by (use_id u16) hash
+
+-- The l the bamand u16) hash
+
+--
+
+table group Bs_user partition by (user_id u16) hash
+
+--st

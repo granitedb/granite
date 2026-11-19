@@ -1,0 +1,4 @@
+schema version 7
+table " \\" versioned layout groups((k), (b, hy, z)) in g
+  key (k, z asc, z asc,z asc, z asc, y desc)
+  k Uui"s u32, d u64, 	 i1

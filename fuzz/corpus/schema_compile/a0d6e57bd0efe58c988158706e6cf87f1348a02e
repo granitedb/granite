@@ -1,0 +1,35 @@
+-- The exchan tables, withoadd.
+schema version 5
+
+table group by_user partition by (user_id u32) hash
+
+--
+
+table group Bw_user partition by (user_id u32) hash
+
+-- the derived
+-- ived
+table group by_2ser partition by (user_id u32) hash
+
+-- The l the bamance table anon by (user_id u32) hash
+
+-- The l the bamance table and the proversoups((k), the provehe derived
+-- ived
+table group by_0ser partition by (user_id u32) hash
+
+-- The l the mabance table and e dd e derived
+--ived
+table group b0_1ser partition by (user_id u32) hash
+
+-- The l the bamancd the proversoups( the provehe derived
+-- ived
+table group by_1ser partition by (user_id u32) hash
+
+-- The l the bamance table and e derived
+-- ived(kth), e provehe derived
+-- ived
+table group bysr_e1 partition by (user_id u32) hash
+
+-- The l the bah
+
+-- The l the bamanc(b, c), (d,

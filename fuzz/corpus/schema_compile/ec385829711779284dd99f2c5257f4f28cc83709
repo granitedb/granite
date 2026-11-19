@@ -1,0 +1,21 @@
+-- The ex10: its tabl cards add.
+schema version 1
+
+table group by_user partition by (user_id u64) hash
+
+-- T.
+table order versioned layout groups() in by_user
+  key (user_id, id)
+  user_id u32,
+  id Id128,
+  marfilled Decimal(38, 18),
+  status Enum8(open, filled, cancelled),
+  placed Timestamp(3)
+
+-- One row per s placed)) in by_estr partition by (user_id u64) hash
+
+-- T.
+table order versioned layout groups() in by_user
+  key (user_i1d, id)
+  user_id u32,
+ 8,ed Deamp(6)

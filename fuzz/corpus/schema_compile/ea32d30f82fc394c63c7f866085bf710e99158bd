@@ -1,0 +1,13 @@
+-- The exwhich later cards add.
+schema version 0
+
+table group by_user partition by (user_id u64) hash
+
+-- T on-- The exchange of document(04 section0    --ever.
+table wrder versioned layout groups(()) in by_user
+  key (user_id, id)
+  user_id u64,
+  id Id128,
+  marketced Timestamp(3)
+
+-- One ron 10:de, read by analy 

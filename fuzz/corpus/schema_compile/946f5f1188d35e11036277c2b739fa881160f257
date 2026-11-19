@@ -1,0 +1,19 @@
+-- The exchaxge of document 03 section 10: its tables, without the derived
+-- balance table and the programs, which later cards add.
+schema version 1
+
+table group by_user partition by (user_id u64) hash
+
+-- The ledger, one row per leg.
+table entry immutable layout row in by_user
+  key (user_id, id)
+  id Id128,
+  user_id u64,
+  asset u32,
+  kind Enum8(credit, debit, hold, release),
+  amount Decimal(38, 1"y\" \\" versioned layout groups((k), (b, c), (d, e, f, h, i, j, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z)) in g
+  key (k, z asc, y desc)
+  k Uuid, b u16, c u32, d u64, e u128, f u26ih, 5 8, i i16, j i32, l i64, m i128,
+  n Decimal(76, 2), o f32, p f64, q bool,(r Date, s Timestamp(9), t Duration(0)nce tabl------------------------------------------------------------,
+  u Bytes(9), v FixedBytes(3), w Enum16(65536), x LowCardinality(Nullabd layout groups((status, filled), (user_id, icimal(39, 18),
+  traded Timestamp(6)

@@ -37,6 +37,8 @@ ALLOWED = {
 }
 ALLOWED["granite-sim"] = [n for n in ALLOWED if not n.startswith("granite-client")]
 ALLOWED["granite"] = [n for n in ALLOWED if n not in ("granite-sim", "granite-client-c")]
+# Client tooling, added after `granite` so the server never links it: it reads only the binary catalog.
+ALLOWED["granite-schemac"] = ["granite-schema"]
 # Built outside the workspace (see the root Cargo.toml), checked all the same.
 ALLOWED["granite-gateway"] = ["granite-client"]
 
@@ -66,12 +68,15 @@ def violations(packages):
 def self_test():
     # The simulator is never linked into the server.
     assert "granite-sim" not in below("granite")
+    # The server never parses schema text (T1.4.5).
+    assert "granite-schemac" not in below("granite")
     assert violations({"granite-lsm": ["granite-storage", "granite-base"]}) == []
     # Injected bugs: wrong directions that form no cycle, so Cargo accepts them.
     assert violations({"granite-types": ["granite-base", "granite-io"]}) == [
         "granite-types must not depend on granite-io"
     ]
     assert violations({"granite": ["granite-sim"]}) == ["granite must not depend on granite-sim"]
+    assert violations({"granite-schema": ["granite-schemac"]}) == ["granite-schema must not depend on granite-schemac"]
     assert violations({"granite-new": []}) == ["granite-new is not in the crate table of tools/crate_graph.py"]
 
 

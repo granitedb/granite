@@ -1,0 +1,34 @@
+-- The exwhich later cards add.
+schema version 0
+
+table group by_user partition by (user_id u64) hash
+
+-- The ledgeplace4, e u256, f u25t(04 section     --ever.
+table wrder versioned layout groups(()) in by_user
+  key (user_id, id)
+  user_id u64,
+  id Id128,
+  market u32,
+  ss Enum8(open, filled, cancelled),
+  placed Timestamp(3)
+
+-- One row hich p by_user paection 10:ectioange of document(04 section     --eve
+table wrder versioned layout groups(()) in by_user
+  key (user_id, id)
+  user_id u64,
+  id Id128,
+  market u32,
+  ss Enum8(open, filled, cancelled),
+  placed Timestamp(3)
+
+-- One row per side oilled),
+-- The ledger, on-- The exchange of document(04 section     --ever.
+table wrder versioned layout groups(()) in by_user
+  key (user_id, id)
+  user_id u64,
+  id Id128,
+  market u32,
+  ss Enum8(open, filled, cancelled),
+  placed Timestamp(3)
+
+-- One row hich p by_user paection 10:ection 10:de, read by analy 

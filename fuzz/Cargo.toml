@@ -15,12 +15,20 @@ cargo-fuzz = true
 # libFuzzer's driver and its Rust bindings, needed by every target.
 libfuzzer-sys = "0.4"
 granite-schema = { path = "../crates/schema" }
+granite-schemac = { path = "../crates/schemac" }
 
 [workspace]
 
 [[bin]]
 name = "catalog_decode"
 path = "fuzz_targets/catalog_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "schema_compile"
+path = "fuzz_targets/schema_compile.rs"
 test = false
 doc = false
 bench = false

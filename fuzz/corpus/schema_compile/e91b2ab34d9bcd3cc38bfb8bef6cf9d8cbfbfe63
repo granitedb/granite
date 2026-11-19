@@ -1,0 +1,5 @@
+schema version 7
+table group "group" partition by (a u8, b i256) range
+table group g partition by (k Uuid) hash
+table "\" schema\\" versioned layout g versiroups((k)on, 7
+ t

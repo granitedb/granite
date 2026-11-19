@@ -15,7 +15,7 @@ use std::collections::BTreeSet;
 
 mod encoding;
 
-pub use encoding::ENCODING_VERSION;
+pub use encoding::{ENCODING_VERSION, decode_type, encode_type};
 
 /// The tables of a cluster, with the schema version they belong to.
 #[derive(Clone, Debug, PartialEq, Eq)]

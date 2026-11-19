@@ -72,11 +72,30 @@ Descending columns: every byte of the column's ascending encoding is inverted (`
 
 The encoded primary key, all columns included, must not exceed the primary key limit of section 8; a longer key is rejected with `KeyTooLarge`. Escaping counts toward the limit.
 
-The bit layout inside an Id128 (a millisecond timestamp in the high bits) is defined by its generator, T0.2.4; the key encoding treats it only as an unsigned 128-bit integer, so any layout whose numeric order is the creation order sorts by creation time.
+The key encoding treats an Id128 only as an unsigned 128-bit integer; its bit layout, which makes the numeric order the creation order, is section 2.3.
 
 ### 2.2 Fixed-width storage representation (part of the format)
 
 How one value is stored in a row or a column. Every type except String and Bytes has a fixed width. Integers, Decimal mantissas, Date, Timestamp, Duration, Id128 and enum indexes are little-endian two's complement in the widths of section 2.1; u256 and i256 are `lo` then `hi`, both little-endian, which is the 32-byte value little-endian. f32 and f64 are their IEEE 754 bits, little-endian, with every NaN replaced by the canonical NaN (0x7FC00000 for f32, 0x7FF8000000000000 for f64); a stored NaN with other bits is rejected on read. -0.0 is kept. bool is 0x00 or 0x01. Uuid and FixedBytes(N) are their bytes. Nullable(T) is one flag byte, 0x00 null and 0x01 present, followed by T's representation; for a null those bytes are all zero, which is checked on read. LowCardinality(T) is stored as T; its dictionary encoding belongs to the column layout of document 01.
+
+### 2.3 Id128 layout (part of the format)
+
+An Id128 is created by the client (`granite_base::id128`). Its bits, numbered from the least significant, are part of the format; a change needs a new format version (document 01 section 2):
+
+| Bits | Width | Content |
+|---|---|---|
+| 127 to 80 | 48 | Unix time in milliseconds, which lasts until the year 10889. |
+| 79 to 0 | 80 | Random bits. |
+
+Because the time is in the high bits and the key encoding is the u128 big-endian (section 2.1), ids sort by creation time and new keys land above older data.
+
+The generator takes the time and the random bits from its caller and reads neither itself. For each id: if the time is later than the time field of the generator's last id, the id is that time and fresh random bits; otherwise (the same millisecond, or a clock that went backwards) it is the last id plus one. A full random field carries into the time field, so a generator that creates more ids in one millisecond than the field holds borrows from later milliseconds. Ids from one generator therefore strictly increase whatever the clock does, and may carry a time slightly ahead of the wall clock after a burst or while the clock is behind. A client uses one generator per process. Ids from different generators are ordered only by their time fields.
+
+Collision probability. Assume each generator's random bits are uniform and independent of every other generator's, and count a process that restarts as a new generator. A generator's ids with a given time field t form one run of consecutive integers: it starts at a uniform random value, or at zero when it was borrowed from millisecond t - 1, and grows by one. Two runs of lengths a and b with independent uniform starts overlap only if the difference of their starts is one of a + b - 1 values out of 2^80, so with probability below (a + b) / 2^80. A borrowed run needs the run before it to start within its length of the field's top, which has probability below that length divided by 2^80. Summing over every millisecond and every pair of generators active in it, each id is counted at most G - 1 times among G generators, so for N ids in total
+
+P(any two ids are equal) <= (G - 1) N / 2^80 + N / 2^80 = G N / 2^80.
+
+For example, 1,000 clients each creating 1,000,000 ids per second for a year (N = 3.2 x 10^16) give at most 2.6 x 10^-5, and the 100,000,000 ids of two generators in the test give at most 1.7 x 10^-16.
 
 ## 3. Table kinds
 

@@ -14,3 +14,5 @@ workspace = true
 [dependencies]
 granite-schema.workspace = true
 granite-lsm.workspace = true
+granite-base.workspace = true
+granite-types.workspace = true

@@ -271,6 +271,97 @@ Execution model inside a shard:
 
 Later extension, not planned in detail: deterministic WASM procedures with fuel metering, for logic the IR cannot express.
 
+### 5.1 Program IR and its encoding (part of the format)
+
+A program travels and is stored as a typed tree (`granite_txn::Program`) in the binary form below, IR version 1. Integers are little-endian. The decoder reads at most one message (section 8) and returns the tree or a typed error; whether the tree is a valid program (types, names, bounds, scopes) is decided by the validator, not by the decoder. The encoding is canonical: a tree has exactly one encoding, and bytes the decoder accepts are exactly the encoding of the tree it returns. A change to any element needs a new IR version.
+
+```
+program    u16 IR version (1), name, u8 parameter count,
+           per parameter: name, type,
+           block (the body)
+block      u16 statement count, statements
+exprs      u16 expression count, expressions
+name       u8 length, UTF-8 bytes (table names, error codes, the program and its parameters)
+type       as in section 1.2, a valid type
+```
+
+Statements, one opcode byte then the operands:
+
+| Opcode | Statement | Operands | Meaning |
+|---|---|---|---|
+| 0 | `let` | expr | Binds the value to the next local. |
+| 1 | `if` | expr, block, block | The first block if the condition holds, else the second (empty for no `else`). |
+| 2 | `require` | expr, name | Aborts the invocation with the named error code unless the condition holds. |
+| 3 | `insert` | name, exprs | Inserts a full row into the named table, columns in declaration order. |
+| 4 | `upsert` | name, exprs | Inserts or replaces a full row. |
+| 5 | `update` | name, exprs, u16 count, per column: u16 column index, expr | Reads the row with the primary key `exprs`, replaces the listed columns and writes the full new row (section 9). |
+| 6 | `delete` | name, exprs | Deletes the row with the primary key `exprs`. |
+| 7 | `for` | scan, block | Runs the block once per scanned row, with the row bound to the next local. |
+| 8 | `return` | expr | Returns the value. |
+
+```
+scan       name (table), exprs (key prefix), bound (lower), bound (upper), u16 limit
+bound      u8: 0 none, 1 inclusive, then expr, 2 exclusive, then expr
+```
+
+A scan reads, in key order, at most `limit` rows of the table whose primary key starts with the prefix values and whose next key column is within the bounds. `scan table[range] limit n` of section 5 is the `for` over it; the limit is a constant of the encoding, so no loop is unbounded.
+
+Expressions, one opcode byte then the operands:
+
+| Opcode | Expression | Operands | Meaning |
+|---|---|---|---|
+| 0 | literal | type, value | A constant of the type. |
+| 1 | parameter | u8 index | A parameter of the program. |
+| 2 | local | u16 number | A local. |
+| 3 | field | expr, u16 column index | A column of a row. |
+| 4 | `get` | name, exprs | The row of the named table with that primary key, or null. `exists t[k]` is `not is_null(get t[k])`. |
+| 5 | `commit_ts()` | | The commit timestamp of the transaction (section 9). |
+| 6 | `-` | expr | Negation. |
+| 7 | `not` | expr | Boolean negation. |
+| 8 | `is_null` | expr | Whether a nullable value is null. |
+| 9 | `unwrap_or` | expr, expr | The value, or the second when it is null. |
+| 10 | `match` | expr, expr, expr | The second when the first is null; otherwise the third, with the value bound to the next local. |
+| 11 | cast | expr, type | The value as the type; fails unless it is unchanged (section 2). |
+| 12 to 24 | binary | expr, expr | `+`, `-`, `*`, `/`, `%`, `=`, `!=`, `<`, `<=`, `>`, `>=`, `and`, `or`, in that order. |
+
+Every other opcode is rejected with `UnknownOpcode`. There is no element for time other than `commit_ts()`, for randomness, external calls, dynamic table names, unbounded loops or recursion: tables are named by constants, and the only loop is `for` over a scan with a constant limit.
+
+Locals are numbered from 0 in the order of their binding elements (`let`, `for`, `match`) in the encoding.
+
+A literal's value is the storage representation of section 2.2 for a fixed-width type, so a NaN must be the canonical one and a null's bytes zero. Otherwise LowCardinality(T) is T's value; Nullable(T) is a flag byte, 0x00 for null or 0x01 followed by T's value; and String and Bytes are a u32 length and the bytes. The value must be a valid value of its type (`Type::check`).
+
+Limits of IR version 1, each tested at its value and one over:
+
+| Limit | Value |
+|---|---|
+| Encoded program | one message (section 8) |
+| Nesting depth: a body statement is at depth 1, and each statement or expression one deeper than the one containing it | 64 (`DEPTH_MAX`) |
+| Statements and expressions in one program | 10,000 (`NODES_MAX`), so every count fits its u16 |
+| Parameters | 255 |
+| Name | 255 bytes |
+
+Because each statement and expression takes at least one byte, nesting is limited and lists grow element by element, the decoder's memory is proportional to its input and its recursion to the depth limit. Its largest single allocation is below 2 MiB: a list of at most `NODES_MAX` elements, or a copy of part of an input of at most one message.
+
+Errors (`granite_txn::Error`), whose numbers are part of the protocol:
+
+| Code | Name | Meaning |
+|---|---|---|
+| 1 | `Malformed` | Truncated, trailing bytes, a tag out of range, invalid UTF-8 in a name, an invalid type; or, when encoding, a name over 255 bytes or more than 255 parameters. |
+| 2 | `UnsupportedVersion` | An IR version this binary does not read, such as a newer one. |
+| 3 | `UnknownOpcode` | A statement or expression opcode not in the tables above. |
+| 4 | `TooDeep` | Nesting deeper than the depth limit. |
+| 5 | `TooManyNodes` | More statements and expressions than the node limit. |
+| 6 | `TooLarge` | An encoding longer than one message. |
+| 7 | `InvalidLiteral` | A literal that is not a valid value of its type, or not in its canonical form. |
+
+Example: `program t(a: u64)` with the body `require not is_null(get acc[a]) else E` and `return a + 1` encodes as
+
+```
+01 00  01 74  01  01 61 03  02 00                          version 1, "t", 1 parameter "a": u64, 2 statements
+02 07 08 04 03 61 63 63 01 00 01 00  01 45                 require not is_null(get "acc"[param 0]) else "E"
+08 0c 01 00 00 03 01 00 00 00 00 00 00 00                  return param 0 + (u64 1)
+```
+
 ## 6. Two-phase business patterns
 
 For workflows that span external systems, the schema library provides a standard pattern rather than a protocol feature:

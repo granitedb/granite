@@ -156,8 +156,10 @@ dependencies = [
 name = "granite-txn"
 version = "0.0.0"
 dependencies = [
+ "granite-base",
  "granite-lsm",
  "granite-schema",
+ "granite-types",
 ]
 
 [[package]]

@@ -16,6 +16,7 @@ cargo-fuzz = true
 libfuzzer-sys = "0.4"
 granite-schema = { path = "../crates/schema" }
 granite-schemac = { path = "../crates/schemac" }
+granite-txn = { path = "../crates/txn" }
 
 [workspace]
 
@@ -29,6 +30,13 @@ bench = false
 [[bin]]
 name = "schema_compile"
 path = "fuzz_targets/schema_compile.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "program_decode"
+path = "fuzz_targets/program_decode.rs"
 test = false
 doc = false
 bench = false

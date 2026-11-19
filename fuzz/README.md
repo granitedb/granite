@@ -17,6 +17,7 @@ Each target's corpus is in `corpus/<target>/`, committed after every gate run; c
 |---|---|
 | `catalog_decode` | `granite_schema::Catalog::decode` on arbitrary bytes never panics, and what it accepts encodes back to the same bytes. The corpus grew from the golden catalog of `crates/schema/src/tests.rs`. |
 | `schema_compile` | `granite_schemac::compile` on arbitrary bytes never panics or hangs, and what it accepts prints as text that compiles to the same bytes. Run with `-max_len=1048576` (one message, the input bound of T1.4.5's gate). The corpus grew from `schemas/exchange.schema` and a schema using every form of the grammar. |
+| `program_decode` | `granite_txn::Program::decode` on arbitrary bytes never panics, and what it accepts encodes back to the same bytes. Run with `-max_len=1048576` (one message) and `-malloc_limit_mb=2`, so any allocation of 2 MiB or more fails the run (the bound of document 03 section 5.1); recursion is bounded by the depth limit, and a deep input that overflowed the stack would crash. The corpus grew from the golden program of `crates/txn/tests/ir.rs`, one input per opcode and literals of several types. |
 
 ## Gate runs
 

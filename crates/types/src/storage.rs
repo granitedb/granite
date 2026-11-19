@@ -38,7 +38,7 @@ pub fn encode_fixed(ty: &Type, value: &Value, out: &mut Vec<u8>) -> Result<(), E
     };
     match (ty.logical(), value) {
         // A null is a zero flag byte and zeroed bytes in place of the value.
-        (Type::Nullable(_), Value::Null) => out.resize(start + width as usize, 0),
+        (Type::Nullable(_), Value::Null) => out.resize(start + crate::usize32(width), 0),
         (Type::Nullable(inner), v) => {
             out.push(1);
             encode_fixed(inner, v, out)?;
@@ -69,7 +69,7 @@ pub fn encode_fixed(ty: &Type, value: &Value, out: &mut Vec<u8>) -> Result<(), E
             unreachable!("check() and fixed_width() reject them")
         }
     }
-    assert_eq!(out.len() - start, width as usize);
+    assert_eq!(out.len() - start, crate::usize32(width));
     Ok(())
 }
 
@@ -78,7 +78,7 @@ pub fn encode_fixed(ty: &Type, value: &Value, out: &mut Vec<u8>) -> Result<(), E
 pub fn decode_fixed(ty: &Type, bytes: &[u8]) -> Result<Value, Error> {
     ty.validate()?;
     let width = ty.fixed_width().ok_or(Error::NotFixedWidth)?;
-    if bytes.len() != width as usize {
+    if bytes.len() != crate::usize32(width) {
         return Err(Error::Malformed);
     }
     let mut r = Reader {
@@ -145,7 +145,7 @@ pub fn decode_fixed(ty: &Type, bytes: &[u8]) -> Result<Value, Error> {
         Type::Duration(_) => Value::Duration(i64::from_le_bytes(r.take()?)),
         Type::Uuid => Value::Uuid(r.take()?),
         Type::Id128 => Value::Id128(u128::from_le_bytes(r.take()?)),
-        Type::FixedBytes(n) => Value::FixedBytes(r.take_vec(*n as usize)?),
+        Type::FixedBytes(n) => Value::FixedBytes(r.take_vec(crate::usize32(*n))?),
         Type::Enum8 { .. } => Value::Enum8(r.take::<1>()?[0]),
         Type::Enum16 { .. } => Value::Enum16(u16::from_le_bytes(r.take()?)),
         Type::String { .. } | Type::Bytes { .. } | Type::LowCardinality(_) => {

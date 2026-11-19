@@ -3,10 +3,12 @@
 //! [`Type`] describes a column, [`Value`] holds one typed value in memory.
 //! [`key`] is the order-preserving key encoding and [`storage`] the
 //! fixed-width storage representation; both are part of the on-disk format
-//! and are specified byte by byte in document 03 section 2.
+//! and are specified byte by byte in document 03 section 2. [`arith`] is the
+//! checked arithmetic, comparison and casts of the numeric types.
 
 use granite_base::constants::FORMAT;
 
+pub mod arith;
 pub mod key;
 pub mod storage;
 
@@ -175,6 +177,14 @@ pub enum Error {
     Malformed,
     /// The type has no fixed-width storage representation.
     NotFixedWidth,
+    /// An arithmetic result or a cast value outside the range of its type,
+    /// or a Decimal(P, S) operand with more than P digits ([`arith`]).
+    Overflow,
+    /// A division or remainder by zero ([`arith`]).
+    DivisionByZero,
+    /// A result with more fractional digits, or significant bits, than its
+    /// type holds, or NaN cast to a non-float type ([`arith`]).
+    LossOfPrecision,
 }
 
 impl Type {
@@ -208,7 +218,7 @@ impl Type {
     pub fn check(&self, value: &Value) -> Result<(), Error> {
         self.validate()?;
         let length = |len: usize, max: u32, exact: bool| {
-            let (len, max) = (len as u64, u64::from(max));
+            let (len, max) = (len64(len), u64::from(max));
             if len > max || (exact && len != max) {
                 Err(Error::Length { len, max })
             } else {
@@ -267,6 +277,16 @@ pub fn decimal_width(precision: u8) -> u32 {
         19..=38 => 16,
         _ => 32,
     }
+}
+
+/// A length as a u64, which holds every `usize` of the supported platforms.
+fn len64(len: usize) -> u64 {
+    u64::try_from(len).expect("usize fits u64")
+}
+
+/// A u32 length as a `usize`, which holds every u32 on the supported platforms.
+fn usize32(n: u32) -> usize {
+    usize::try_from(n).expect("u32 fits usize")
 }
 
 /// The canonical NaN of f32: positive, quiet, zero payload.

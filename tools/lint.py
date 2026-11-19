@@ -4,8 +4,9 @@
 The rules and their reasons are in docs/coding-rules.md. Clippy enforces the
 bans listed in clippy.toml; this script runs it twice so that tests and
 test-only modules are exempt from them, then checks what clippy cannot: where
-`unsafe` may appear, `usize`/`isize` in `#[repr(C)]` layouts, and dependencies
-on random-number crates.
+`unsafe` may appear, `usize`/`isize` in `#[repr(C)]` layouts, dependencies
+on random-number crates, and unchecked arithmetic and `as` casts in the crates
+that compute replicated state.
 
 Before linting the workspace it lints every file in tools/lint-fixtures/ as
 if it sat at a given path in the repository, and fails unless each banned
@@ -37,6 +38,16 @@ IO_CRATE = "crates/io/"
 
 # Crates that produce random numbers, banned as normal dependencies outside io.
 RANDOM_CRATES = {"rand", "rand_core", "getrandom", "fastrand"}
+
+# Crates whose library and binary code may not wrap, saturate, skip an overflow
+# check or cast with `as` (docs/coding-rules.md). Their `#[cfg(test)]` modules
+# and tests/ are exempt, as tests are from the determinism bans.
+CHECKED_CRATES = ("crates/types/src/", "crates/txn/src/", "crates/shard/src/")
+UNCHECKED = re.compile(r"\b(?:(?:wrapping|saturating|unchecked|overflowing)_\w+|Wrapping|Saturating"
+                       r"|cast_(?:un)?signed|unbounded_sh[lr])\b")
+AS_CAST = re.compile(r"\bas\s+(?:[iu](?:8|16|32|64|128|size)|f32|f64|char|Self|_|\$\w+)(?!\w)")
+TEST_MODULE = re.compile(r"#\[cfg\(test\)\]\s*(?:pub(?:\([^)]*\))?\s+)?mod\s+\w+\s*\{")
+USE = re.compile(r"\s*(?:#\[[^\]]*\]\s*)*(?:pub(?:\([^)]*\))?\s+)?use\b")
 
 BANS = ["clippy::disallowed_methods", "clippy::disallowed_types", "clippy::disallowed_macros"]
 CLIPPY_PASSES = [
@@ -88,6 +99,22 @@ FIXTURE_CASES = [
     ("unsafe_outside_list.rs", "crates/storage/src/lib.rs", ["crates/storage/src/lib.rs:9: unsafe outside"]),
     ("unsafe_without_safety.rs", "crates/io/src/message_pool.rs", ["unsafe block missing a safety comment"]),
     ("allow_without_reason.rs", "crates/storage/src/lib.rs", ["`allow` attribute without specifying a reason"]),
+    *(("unchecked_arithmetic.rs", f"crates/{c}/src/lib.rs", [
+        f"crates/{c}/src/lib.rs:{line}: {what}" for line, what in [
+            (7, "unchecked arithmetic `wrapping_add`"),
+            (11, "unchecked arithmetic `saturating_sub`"),
+            (15, "unchecked arithmetic `overflowing_mul`"),
+            (19, "unchecked arithmetic `wrapping_neg`"),
+            (23, "unchecked arithmetic `cast_unsigned`"),
+            (27, "unchecked arithmetic `unchecked_add`"),
+            (30, "unchecked arithmetic `Wrapping`"),
+            (31, "unchecked arithmetic `Saturating`"),
+            (35, "`as` cast"),
+            (39, "`as` cast"),
+        ]]) for c in ("types", "txn", "shard")),
+    ("unchecked_arithmetic.rs", "crates/storage/src/lib.rs", []),
+    ("unchecked_arithmetic.rs", "crates/types/tests/arith.rs", []),
+    ("checked_arithmetic.rs", "crates/types/src/lib.rs", []),
     ("io_accepted.rs", "crates/io/src/lib.rs", []),
     ("rand.toml", "crates/io/Cargo.toml", []),
 ]
@@ -107,9 +134,35 @@ def line_of(text, offset):
     return text.count("\n", 0, offset) + 1
 
 
+def closing(code, open_):
+    """The offset of the bracket that closes the one at `open_`."""
+    depth = 0
+    for end in range(open_, len(code)):
+        depth += {"{": 1, "(": 1, "}": -1, ")": -1}.get(code[end], 0)
+        if depth == 0:
+            return end
+    return len(code)
+
+
+def unchecked_arithmetic(path, code):
+    """Errors for wrapping, saturating and unchecked arithmetic and `as` casts outside test modules."""
+    for m in reversed(list(TEST_MODULE.finditer(code))):
+        end = closing(code, m.end() - 1)
+        code = code[:m.start()] + re.sub(r"[^\n]", " ", code[m.start():end + 1]) + code[end + 1:]
+    errors = [(m.start(), f"unchecked arithmetic `{m.group(0)}`; use the checked form or "
+               "granite_types::arith") for m in UNCHECKED.finditer(code)]
+    # `use a as b` renames; the statement starts after the last `;` or `}`.
+    errors += [(m.start(), "`as` cast, which can truncate or round; use From or TryFrom")
+               for m in AS_CAST.finditer(code)
+               if not USE.match(code, max(code.rfind(";", 0, m.start()), code.rfind("}", 0, m.start())) + 1)]
+    return [f"{path}:{line_of(code, at)}: {what} (docs/coding-rules.md)" for at, what in sorted(errors)]
+
+
 def source_violations(path, text):
     """Errors for one Rust file at `path`, relative to the repository root."""
     code, errors = code_only(text), []
+    if path.startswith(CHECKED_CRATES):
+        errors += unchecked_arithmetic(path, code)
     if path not in UNSAFE_MODULES:
         errors += [f"{path}:{line_of(code, m.start())}: unsafe outside the modules listed in tools/lint.py"
                    for m in re.finditer(r"\bunsafe\b", code)]
@@ -119,11 +172,8 @@ def source_violations(path, text):
             if not re.search(r"\b(C|packed)\b", m.group(1)) or not item:
                 continue
             # The body runs to the bracket that closes the one ITEM stopped at.
-            open_, depth = item.end() - 1, 0
-            for end in range(open_, len(code)):
-                depth += {"{": 1, "(": 1, "}": -1, ")": -1}.get(code[end], 0)
-                if depth == 0:
-                    break
+            open_ = item.end() - 1
+            end = closing(code, open_)
             errors += [f"{path}:{line_of(code, open_ + u.start())}: usize or isize in a #[repr({m.group(1)})] "
                        "type, which is a persisted or transmitted layout"
                        for u in re.finditer(r"\b[iu]size\b", code[open_:end])]

@@ -8,7 +8,7 @@ default:
     @just --list --unsorted
 
 # Everything CI checks: crate directions, formatting, lints, tests, the API docs, the gateway build, and dependency licences and advisories.
-check: crate-graph fmt-check lint test doc gateway roadmap-plan deny
+check: crate-graph fmt-check lint test test-release doc gateway roadmap-plan deny
 
 # Fail if a crate depends on another against the allowed direction (docs/06 section 5).
 crate-graph:
@@ -21,6 +21,14 @@ build:
 # Run the tests.
 test:
     cargo test --workspace --locked
+
+# Check that overflow checks and assertions stay on in the release profile, with a test built in it.
+test-release:
+    GRANITE_PROFILE=release cargo test --release --locked -p granite-types --test release
+
+# The full arithmetic gates of T1.4.2, in the release profile: every 16-bit pair and 10,000,000 cases per operation and type (about half an hour). Pass a seed with `GRANITE_SEED=<n> just test-arithmetic`.
+test-arithmetic:
+    GRANITE_FULL=1 cargo test --release --locked -p granite-types --test arithmetic -- --nocapture
 
 # Format the code.
 fmt:

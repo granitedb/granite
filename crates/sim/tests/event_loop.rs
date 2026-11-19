@@ -253,6 +253,15 @@ fn lowest_class_keeps_its_share_under_a_busy_commit_class() {
     }
 }
 
+/// On the virtual clock a task takes no time unless the simulator moves it;
+/// such tasks, always ready, still let the iteration end.
+#[test]
+fn tasks_that_take_no_time_end_the_iteration() {
+    let (mut shard, mut node, mut tasks) = setup([true; 6], [0; 6]);
+    shard.iterate(&mut node, &mut tasks);
+    assert_eq!(node.monotonic(), 0);
+}
+
 #[test]
 fn a_class_alone_gets_the_whole_iteration() {
     let iteration: u64 = BUDGETS.iter().sum();

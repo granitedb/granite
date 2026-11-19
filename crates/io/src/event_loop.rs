@@ -155,7 +155,10 @@ impl EventLoop {
             }
             let after = io.monotonic();
             assert!(after >= *now, "the monotonic clock never goes back");
-            *credit -= i64::try_from(after - *now).expect("a task ends within 292 years");
+            // At least a nanosecond, so a class whose tasks take no virtual
+            // time still runs out of credit and the iteration ends.
+            let spent = (after - *now).max(1);
+            *credit -= i64::try_from(spent).expect("a task ends within 292 years");
             *now = after;
         }
     }

@@ -41,3 +41,37 @@ jobs:
           else
             echo "::warning::just sim does not exist yet (T0.4.5); no seeds ran"
           fi
+
+  models:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install just
+        run: sudo apt-get update && sudo apt-get install -y just
+
+      # The jar's pinned checksum, read from the script that verifies it.
+      - name: Read the TLA+ tools checksum
+        id: tla
+        run: echo "sha=$(sed -n 's/^sha=//p' tools/model.sh)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: target/tla/tla2tools.jar
+          key: tla2tools-${{ steps.tla.outputs.sha }}
+
+      - name: Model-check every model
+        run: |
+          failed=0
+          for dir in models/*/; do
+            just model "$(basename "$dir")" || failed=1
+          done
+          exit "$failed"

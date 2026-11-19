@@ -8,7 +8,7 @@ They are written in TLA+ and checked with TLC, from the pinned release of the TL
 
 - `models/<name>/` holds the TLA+ modules of one model.
 - Every `models/<name>/<Base>.cfg` is a TLC run of `models/<name>/<Base>.tla`, and must finish with no violation. A run module is often a one-line `EXTENDS` of the model's main module, so that each set of bounds has its own file.
-- Every `models/<name>/defects/<Base>.cfg`, with its `.tla`, is an injected defect, and must produce a counterexample. A defect module may extend the model's main module (the script checks it next to copies of the model's modules, so its name must differ from theirs) and replace one of its definitions from the `.cfg` with `Name <- Replacement`.
+- Every `models/<name>/defects/<Base>.cfg`, with its `.tla`, is an injected defect, and must produce a counterexample: a deadlock (when its `.cfg` sets `CHECK_DEADLOCK TRUE`), a violated invariant or property, or a failed `Assert` (TLC exits 11 to 14). Any other outcome, a parse or evaluation error included, fails the run. The runner never turns deadlock checking off; each `.cfg` decides. A defect module may extend the model's main module (the script checks it next to copies of the model's modules, so its name must differ from theirs) and replace one of its definitions from the `.cfg` with `Name <- Replacement`.
 - `models/<name>/README.md` holds the results of every run (bounds, states, depth, time) and a table mapping each action to the function that implements it. Tasks that implement or change an action keep that table current.
 
 ## Running
@@ -21,4 +21,5 @@ just model vsr
 
 | Model | Protocol | Task |
 |---|---|---|
+| [selftest](selftest/Counter.tla) | None: a counter with one passing run and one defect for each kind of counterexample, so the runner's verdicts are checked on every run of the nightly job | the runner |
 | [vsr](vsr/README.md) | Normal operation and view change with storage faults (document 02) | T2.1.2 |

@@ -48,12 +48,12 @@ run() {
     if [[ $code -eq 0 ]]; then
         stats="$stats $(grep -E '^The depth of the complete state graph search is' "$logf" | grep -oE '[0-9]+' | sed 's/^/depth /' || true)"
     else
-        stats="$stats trace of $(grep -cE '^State [0-9]+:' "$logf" || true) states: $(grep -E '^Error: (Invariant|Action property|Temporal properties|Deadlock)' "$logf" | head -n 1 || true)"
+        stats="$stats trace of $(grep -cE '^State [0-9]+:' "$logf" || true) states: $(grep -E '^Error: (Invariant|Action property|Temporal properties|Deadlock|The first argument of Assert)' "$logf" | head -n 1 || true)"
     fi
     # A counterexample is TLC exit 11 (deadlock, when the .cfg checks for it), 12 (an
-    # invariant) or 13 (a property, action properties included); parse errors and
+    # invariant), 13 (a property, action properties included) or 14 (an Assert); parse errors and
     # crashes exit with other codes.
-    if [[ $expect == pass && $code -eq 0 ]] || [[ $expect == defect && $code -ge 11 && $code -le 13 ]]; then
+    if [[ $expect == pass && $code -eq 0 ]] || [[ $expect == defect && $code -ge 11 && $code -le 14 ]]; then
         verdict=ok
     else
         verdict=FAILED

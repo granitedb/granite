@@ -262,6 +262,8 @@ fn check_pair(columns: &[(Type, Order)], a: &[Value], b: &[Value]) {
     let kb = encode_key(columns, b).unwrap();
     let ctx = || format!("{columns:?}\n a={a:?}\n b={b:?}\n ka={ka:02x?}\n kb={kb:02x?}");
     assert_eq!(ka.cmp(&kb), tuple_cmp(columns, a, b), "order: {}", ctx());
+    let size_max: u64 = columns.iter().map(|(t, _)| t.key_size_max().unwrap()).sum();
+    assert!(ka.len() as u64 <= size_max, "key_size_max: {}", ctx());
     assert_eq!(
         decode_key(columns, &ka).unwrap(),
         a,

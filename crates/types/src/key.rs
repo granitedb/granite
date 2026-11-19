@@ -59,6 +59,21 @@ pub fn decode_key(columns: &[(Type, Order)], bytes: &[u8]) -> Result<Vec<Value>,
     Ok(values)
 }
 
+impl Type {
+    /// The longest key encoding of a value of this type: its fixed width, or
+    /// `2 * max + 2` for String and Bytes, whose every byte may be escaped.
+    pub fn key_size_max(&self) -> Result<u64, Error> {
+        allowed(self)?;
+        Ok(match self.logical() {
+            Type::String { max } | Type::Bytes { max } => 2 * u64::from(*max) + 2,
+            ty => u64::from(
+                ty.fixed_width()
+                    .expect("every other key type is fixed-width"),
+            ),
+        })
+    }
+}
+
 fn allowed(ty: &Type) -> Result<(), Error> {
     ty.validate()?;
     match ty.logical() {
@@ -237,6 +252,23 @@ mod tests {
             encode_primary_key(&cols, &[Value::String(zeros)]),
             Err(Error::KeyTooLarge { size })
         );
+    }
+
+    #[test]
+    fn key_size_max_is_reached() {
+        let zeros = Value::Bytes(vec![0; 3]);
+        let ty = Type::LowCardinality(Box::new(Type::Bytes { max: 3 }));
+        let key = encode_key(&asc(ty.clone()), &[zeros]).unwrap();
+        assert_eq!(ty.key_size_max(), Ok(key.len() as u64));
+        assert_eq!(
+            Type::Decimal {
+                precision: 20,
+                scale: 0
+            }
+            .key_size_max(),
+            Ok(16)
+        );
+        assert_eq!(Type::F64.key_size_max(), Err(Error::NotAllowedInKey));
     }
 
     #[test]

@@ -21,10 +21,24 @@
 //! starved. When every class is ready each gets exactly its budget, and a
 //! class alone gets all of it.
 //!
+//! # Stalls
+//!
+//! The loop records how long each iteration and each task takes in its
+//! [`Metrics`]. No task may run longer than [`SLICE`] (1 ms) without
+//! yielding, that is without returning from [`Tasks::run`]; long-running
+//! work asks a [`Slice`] when to return. A task that runs longer is counted
+//! in [`Metrics::long_tasks`]. Under the simulator it also fails an
+//! assertion ([`EventLoop::assert_slices`]): there time is virtual, so a long
+//! task is a bug in the task, and the failure reproduces from the seed. On
+//! real time the operating system can preempt any task for a millisecond, so
+//! production and benchmarks only count. Assertions stay on in release builds
+//! here, so this switch, not the build profile, is what separates the two.
+//!
 //! The loop reads time only through [`Time`](crate::Time), so it runs unchanged on the
 //! simulator's virtual clock.
 
-use crate::{Completion, Io};
+use crate::metrics::{Metrics, SLICE};
+use crate::{Completion, Io, Time};
 
 /// The scheduling classes of a shard, highest priority first.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -80,6 +94,10 @@ pub struct EventLoop {
     completions: u32,
     tick: u64,
     next_tick: u64,
+    metrics: Metrics,
+    /// Whether a task longer than [`SLICE`] fails an assertion, besides
+    /// being counted.
+    assert_slices: bool,
 }
 
 impl EventLoop {
@@ -102,11 +120,25 @@ impl EventLoop {
             completions,
             tick,
             next_tick: now.checked_add(tick).expect("tick time fits"),
+            metrics: Metrics::default(),
+            assert_slices: false,
         }
+    }
+
+    /// Makes a task longer than [`SLICE`] fail an assertion, as the
+    /// simulator does.
+    pub fn assert_slices(&mut self) {
+        self.assert_slices = true;
+    }
+
+    /// What the loop measured so far.
+    pub fn metrics(&self) -> &Metrics {
+        &self.metrics
     }
 
     /// Runs one iteration.
     pub fn iterate<I: Io, T: Tasks<I>>(&mut self, io: &mut I, tasks: &mut T) {
+        let start = io.monotonic();
         // Capped, as a handler may submit I/O that completes before the
         // backend runs dry; what is left waits for the next iteration.
         for _ in 0..self.completions {
@@ -134,6 +166,8 @@ impl EventLoop {
             self.drain(io, tasks, class, &mut now, &mut spare);
         }
         assert!(self.credit.iter().all(|&c| c <= 0), "no class keeps credit");
+        assert!(now >= start, "the monotonic clock never goes back");
+        self.metrics.iterations.record(now - start);
     }
 
     /// Runs tasks of `class` while it has credit. If it runs out of work
@@ -146,20 +180,54 @@ impl EventLoop {
         now: &mut u64,
         spare: &mut i64,
     ) {
-        let credit = &mut self.credit[class as usize];
-        while *credit > 0 {
+        let c = class as usize;
+        while self.credit[c] > 0 {
             if !tasks.run(io, class) {
-                *spare += *credit;
-                *credit = 0;
+                *spare += self.credit[c];
+                self.credit[c] = 0;
                 return;
             }
             let after = io.monotonic();
             assert!(after >= *now, "the monotonic clock never goes back");
+            let spent = after - *now;
+            *now = after;
+            self.metrics.tasks[c].record(spent);
+            if spent > SLICE {
+                self.metrics.long_tasks[c] += 1;
+                assert!(
+                    !self.assert_slices,
+                    "a {class:?} task ran {spent} ns without yielding, over the {SLICE} ns slice"
+                );
+            }
             // At least a nanosecond, so a class whose tasks take no virtual
             // time still runs out of credit and the iteration ends.
-            let spent = (after - *now).max(1);
-            *credit -= i64::try_from(spent).expect("a task ends within 292 years");
-            *now = after;
+            self.credit[c] -= i64::try_from(spent.max(1)).expect("a task ends within 292 years");
         }
+    }
+}
+
+/// When long-running work (compaction, scans, checkpoint, ingest) should
+/// yield. The work starts a slice when its task starts, asks
+/// [`Slice::expired`] between steps, and returns from [`Tasks::run`] once it
+/// says so, to go on in its next task.
+pub struct Slice {
+    start: u64,
+}
+
+impl Slice {
+    /// A slice that starts now.
+    pub fn start(time: &impl Time) -> Self {
+        Slice {
+            start: time.monotonic(),
+        }
+    }
+
+    /// Whether the work should yield before its next step: half of
+    /// [`SLICE`] has passed. The other half is the margin for a step that
+    /// runs longer than expected.
+    pub fn expired(&self, time: &impl Time) -> bool {
+        let now = time.monotonic();
+        assert!(now >= self.start, "the monotonic clock never goes back");
+        now - self.start >= SLICE / 2
     }
 }

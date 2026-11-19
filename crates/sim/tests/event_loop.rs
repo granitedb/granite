@@ -4,15 +4,25 @@
 //! iteration, delivers completions and ticks, and allocates nothing per
 //! iteration. The core-pinning gate is a test in `granite_io::pin`.
 //!
+//! The gates of T0.3.6 that do not need real hardware follow: a task that
+//! runs over the 1 ms slice fails the assertion or is counted, work that uses
+//! a `Slice` stays under it, the benchmark harness check fails a run with
+//! stalls, the metrics are readable per shard and class, and on virtual time
+//! they are the same for every run of a seed.
+//!
 //! Every task "runs" by moving the virtual clock forward by its cost, so the
 //! shares measured here are what the loop read through `Time`.
 
 #[path = "../../io/tests/common/counting_alloc.rs"]
 mod counting_alloc;
 
-use granite_io::event_loop::{Class, EventLoop, Tasks};
+use std::collections::BTreeMap;
+
+use granite_io::event_loop::{Class, EventLoop, Slice, Tasks};
+use granite_io::histogram::Histogram;
 use granite_io::memory::{Hub, Memory};
 use granite_io::message_pool::{Message, MessagePool, SECTOR_SIZE};
+use granite_io::metrics::{Metrics, SLICE, STALL_LIMIT, Sink};
 use granite_io::{
     Completion, Connection, Full, Io, Network, Peer, Random, Storage, Tag, Time, Zone,
 };
@@ -114,7 +124,10 @@ impl Io for Node {
 
 /// Classes that are ready or not, with tasks of a fixed cost. A commit task
 /// also writes a sector while `writes` lasts and a buffer is free; with
-/// `chain`, each completed write submits the next one at once.
+/// `chain`, each completed write submits the next one at once. The next task
+/// takes `extra` longer; with `jitter`, each task takes a random time of
+/// the same mean. While `steps` are left, a compaction task does steps of
+/// `STEP` until its `Slice` expires.
 struct Synthetic {
     sim: Scheduler<()>,
     pool: MessagePool,
@@ -125,6 +138,21 @@ struct Synthetic {
     completions: u32,
     chain: bool,
     ticks: u64,
+    extra: u64,
+    jitter: bool,
+    steps: u32,
+}
+
+const STEP: u64 = 90 * MICROSECOND;
+
+impl Synthetic {
+    /// Moves the virtual clock `cost` forward, charged to class `c`.
+    fn spend(&mut self, c: usize, cost: u64) {
+        let at = self.sim.now() + cost;
+        self.sim.schedule(at, ()).expect("room");
+        self.sim.step();
+        self.spent[c] += cost;
+    }
 }
 
 impl Tasks<Node> for Synthetic {
@@ -163,20 +191,34 @@ impl Tasks<Node> for Synthetic {
                 .expect("room");
             self.writes -= 1;
         }
-        let at = self.sim.now() + self.costs[c];
-        self.sim.schedule(at, ()).expect("room");
-        self.sim.step();
-        self.spent[c] += self.costs[c];
+        if class == Class::Compaction && self.steps > 0 {
+            let slice = Slice::start(&*io);
+            while self.steps > 0 && !slice.expired(&*io) {
+                self.spend(c, STEP);
+                self.steps -= 1;
+            }
+            return true;
+        }
+        let mut cost = self.costs[c];
+        if self.jitter {
+            cost = 1 + io.next_u64() % (2 * cost);
+        }
+        cost += std::mem::take(&mut self.extra);
+        self.spend(c, cost);
         true
     }
 }
 
 fn setup(ready: [bool; 6], costs: [u64; 6]) -> (EventLoop, Node, Synthetic) {
-    let sim = Scheduler::new(7, 1);
+    setup_seeded(7, ready, costs)
+}
+
+fn setup_seeded(seed: u64, ready: [bool; 6], costs: [u64; 6]) -> (EventLoop, Node, Synthetic) {
+    let sim = Scheduler::new(seed, 1);
     let hub = Hub::new();
     let sector = SECTOR_SIZE as u64;
     let node = Node {
-        memory: Memory::new(&hub, Peer(0), [sector; 4], 4, 7),
+        memory: Memory::new(&hub, Peer(0), [sector; 4], 4, seed),
         clock: sim.clock(),
     };
     let tasks = Synthetic {
@@ -189,6 +231,9 @@ fn setup(ready: [bool; 6], costs: [u64; 6]) -> (EventLoop, Node, Synthetic) {
         completions: 0,
         chain: false,
         ticks: 0,
+        extra: 0,
+        jitter: false,
+        steps: 0,
     };
     (EventLoop::new(BUDGETS, COMPLETIONS, TICK, 0), node, tasks)
 }
@@ -238,6 +283,7 @@ fn lowest_class_keeps_its_share_under_a_busy_commit_class() {
         for _ in 0..ITERATIONS {
             shard.iterate(&mut node, &mut tasks);
         }
+        assert!(shard.metrics().long_tasks[Class::Commit as usize] > 0);
         let got = shares(tasks.spent)[lowest];
         let minimum = budget_share(Class::Handshakes);
         println!(
@@ -332,4 +378,152 @@ fn completions_that_submit_more_do_not_starve_the_classes() {
         assert_eq!(tasks.completions, (i - 1) * COMPLETIONS);
         assert!(tasks.spent.iter().sum::<u64>() > spent, "the classes ran");
     }
+}
+
+#[test]
+#[should_panic(expected = "without yielding")]
+fn a_task_that_spins_for_2_ms_fails_the_assertion() {
+    let (mut shard, mut node, mut tasks) = setup([true; 6], COSTS);
+    shard.assert_slices();
+    shard.iterate(&mut node, &mut tasks);
+    tasks.extra = 2_000 * MICROSECOND;
+    shard.iterate(&mut node, &mut tasks);
+}
+
+#[test]
+fn a_task_that_spins_for_2_ms_is_counted_when_the_loop_does_not_assert() {
+    let (mut shard, mut node, mut tasks) = setup([true; 6], COSTS);
+    tasks.extra = 2_000 * MICROSECOND;
+    for _ in 0..100 {
+        shard.iterate(&mut node, &mut tasks);
+    }
+    let metrics = shard.metrics();
+    assert_eq!(metrics.long_tasks, [1, 0, 0, 0, 0, 0]);
+    assert_eq!(metrics.tasks[0].max(), 2_000 * MICROSECOND + COSTS[0]);
+}
+
+#[test]
+fn work_that_uses_a_slice_yields_in_time() {
+    let (mut shard, mut node, mut tasks) = setup([true; 6], COSTS);
+    shard.assert_slices();
+    // 90 ms of compaction, in steps of 90 µs.
+    tasks.steps = 1_000;
+    let mut iterations = 0;
+    while tasks.steps > 0 {
+        shard.iterate(&mut node, &mut tasks);
+        iterations += 1;
+        assert!(iterations < 10_000, "the work ends");
+    }
+    let compaction = &shard.metrics().tasks[Class::Compaction as usize];
+    println!(
+        "{iterations} iterations, longest compaction task {} ns",
+        compaction.max()
+    );
+    assert!(compaction.max() > SLICE / 2 && compaction.max() < SLICE);
+    assert_eq!(shard.metrics().long_tasks, [0; 6]);
+}
+
+/// A benchmark run: every class ready for 10,000 iterations, and with
+/// `stall`, one task in every 500 iterations runs 6 ms longer.
+fn benchmark(stall: bool) -> Metrics {
+    let (mut shard, mut node, mut tasks) = setup([true; 6], COSTS);
+    for i in 0..ITERATIONS {
+        if stall && i % 500 == 0 {
+            tasks.extra = 6_000 * MICROSECOND;
+        }
+        shard.iterate(&mut node, &mut tasks);
+    }
+    shard.metrics().clone()
+}
+
+#[test]
+fn the_harness_check_fails_a_run_with_a_6_ms_stall_every_500_iterations() {
+    let clean = benchmark(false);
+    let stalled = benchmark(true);
+    for (name, metrics) in [("clean", &clean), ("stalled", &stalled)] {
+        let i = &metrics.iterations;
+        println!(
+            "{name}: {} iterations, p99.9 {} ns, max {} ns",
+            i.count(),
+            i.quantile(999_000),
+            i.max()
+        );
+    }
+    assert_eq!(clean.check_stalls(), Ok(()));
+    let p999 = stalled.check_stalls().expect_err("the stalls are caught");
+    assert!(p999 > STALL_LIMIT);
+    assert_eq!(stalled.long_tasks[Class::Commit as usize], 20);
+}
+
+/// Keeps every value a test reads: count and max for a histogram.
+#[derive(Default)]
+struct Read(BTreeMap<(u32, Option<Class>, &'static str), u64>);
+
+impl Sink for Read {
+    fn histogram(&mut self, shard: u32, class: Option<Class>, name: &'static str, h: &Histogram) {
+        self.0.insert((shard, class, name), h.count());
+        self.0.insert((shard, class, "max"), h.max());
+    }
+    fn counter(&mut self, shard: u32, class: Option<Class>, name: &'static str, value: u64) {
+        self.0.insert((shard, class, name), value);
+    }
+}
+
+#[test]
+fn metrics_are_readable_per_shard_and_class() {
+    let mut read = Read::default();
+    for (shard, class) in [(0, Class::Commit), (1, Class::Reads)] {
+        let mut ready = [false; 6];
+        ready[class as usize] = true;
+        let (mut shard_loop, mut node, mut tasks) = setup(ready, COSTS);
+        tasks.extra = 3_000 * MICROSECOND;
+        for _ in 0..100 {
+            shard_loop.iterate(&mut node, &mut tasks);
+        }
+        shard_loop.metrics().export(shard, &mut read);
+    }
+    let get = |shard, class, name| read.0[&(shard, class, name)];
+    for (shard, busy, idle) in [
+        (0, Class::Commit, Class::Reads),
+        (1, Class::Reads, Class::Commit),
+    ] {
+        assert_eq!(get(shard, None, "loop_iteration_ns"), 100);
+        assert!(get(shard, Some(busy), "task_run_ns") > 100);
+        assert_eq!(
+            get(shard, Some(busy), "max"),
+            3_000 * MICROSECOND + COSTS[busy as usize]
+        );
+        assert_eq!(get(shard, Some(busy), "long_tasks"), 1);
+        assert_eq!(get(shard, Some(idle), "task_run_ns"), 0);
+        assert_eq!(get(shard, Some(idle), "long_tasks"), 0);
+    }
+}
+
+/// Every class ready with random task times from `seed`, and a long task
+/// every 100 iterations.
+fn seeded_run(seed: u64) -> Metrics {
+    let (mut shard, mut node, mut tasks) = setup_seeded(seed, [true; 6], COSTS);
+    tasks.jitter = true;
+    for i in 0..2_000 {
+        if i % 100 == 0 {
+            tasks.extra = 1_500 * MICROSECOND;
+        }
+        shard.iterate(&mut node, &mut tasks);
+    }
+    shard.metrics().clone()
+}
+
+#[test]
+fn measurements_on_virtual_time_are_the_same_for_one_seed() {
+    let first = seeded_run(1);
+    assert_eq!(first, seeded_run(1));
+    assert_ne!(first, seeded_run(2), "the seed changes the measurements");
+    // The values are virtual: no task runs longer than its random cost,
+    // under twice the mean, plus the extra.
+    for class in Class::ALL {
+        let c = class as usize;
+        assert!(first.tasks[c].count() > 0);
+        assert!(first.tasks[c].max() <= 2 * COSTS[c] + 1_500 * MICROSECOND);
+    }
+    assert_eq!(first.long_tasks.iter().sum::<u64>(), 20);
 }

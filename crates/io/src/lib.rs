@@ -2,8 +2,10 @@
 
 pub mod conformance;
 pub mod event_loop;
+pub mod histogram;
 pub mod memory;
 pub mod message_pool;
+pub mod metrics;
 #[cfg(target_os = "linux")]
 pub mod pin;
 pub mod traits;

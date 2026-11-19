@@ -40,14 +40,15 @@ IO_CRATE = "crates/io/"
 RANDOM_CRATES = {"rand", "rand_core", "getrandom", "fastrand"}
 
 # Crates whose library and binary code may not wrap, saturate, skip an overflow
-# check or cast with `as` (docs/coding-rules.md). Their `#[cfg(test)]` modules
-# and tests/ are exempt, as tests are from the determinism bans.
+# check or cast with `as` (docs/coding-rules.md), and their packages. Their
+# `#[cfg(test)]` modules and tests/ are exempt, as tests are from the determinism bans.
 CHECKED_CRATES = ("crates/types/src/", "crates/txn/src/", "crates/shard/src/")
+CHECKED_PACKAGES = ["granite-types", "granite-txn", "granite-shard"]
 UNCHECKED = re.compile(r"\b(?:(?:wrapping|saturating|unchecked|overflowing)_\w+|Wrapping|Saturating"
                        r"|cast_(?:un)?signed|unbounded_sh[lr])\b")
-AS_CAST = re.compile(r"\bas\s+(?:[iu](?:8|16|32|64|128|size)|f32|f64|char|Self|_|\$\w+)(?!\w)")
 TEST_MODULE = re.compile(r"#\[cfg\(test\)\]\s*(?:pub(?:\([^)]*\))?\s+)?mod\s+\w+\s*\{")
-USE = re.compile(r"\s*(?:#\[[^\]]*\]\s*)*(?:pub(?:\([^)]*\))?\s+)?use\b")
+# Clippy knows the types, so it finds every `as` cast, through type aliases too.
+AS_PASS = ["--lib", "--bins", "--locked", "--no-deps", "--", "-D", "warnings", "-D", "clippy::as_conversions"]
 
 BANS = ["clippy::disallowed_methods", "clippy::disallowed_types", "clippy::disallowed_macros"]
 CLIPPY_PASSES = [
@@ -100,18 +101,14 @@ FIXTURE_CASES = [
     ("unsafe_without_safety.rs", "crates/io/src/message_pool.rs", ["unsafe block missing a safety comment"]),
     ("allow_without_reason.rs", "crates/storage/src/lib.rs", ["`allow` attribute without specifying a reason"]),
     *(("unchecked_arithmetic.rs", f"crates/{c}/src/lib.rs", [
-        f"crates/{c}/src/lib.rs:{line}: {what}" for line, what in [
-            (7, "unchecked arithmetic `wrapping_add`"),
-            (11, "unchecked arithmetic `saturating_sub`"),
-            (15, "unchecked arithmetic `overflowing_mul`"),
-            (19, "unchecked arithmetic `wrapping_neg`"),
-            (23, "unchecked arithmetic `cast_unsigned`"),
-            (27, "unchecked arithmetic `unchecked_add`"),
-            (30, "unchecked arithmetic `Wrapping`"),
-            (31, "unchecked arithmetic `Saturating`"),
-            (35, "`as` cast"),
-            (39, "`as` cast"),
-        ]]) for c in ("types", "txn", "shard")),
+        *(f"crates/{c}/src/lib.rs:{line}: unchecked arithmetic `{name}`" for line, name in [
+            (7, "wrapping_add"), (11, "saturating_sub"), (15, "overflowing_mul"), (19, "wrapping_neg"),
+            (23, "cast_unsigned"), (27, "unchecked_add"), (30, "Wrapping"), (31, "Saturating"),
+        ]),
+        "using a potentially dangerous silent `as` conversion",
+        # Clippy names the fixture crate's own path; a type alias and a full path are casts too.
+        *(f"src/lib.rs:{line}:5" for line in (35, 39, 43, 47)),
+    ]) for c in ("types", "txn", "shard")),
     ("unchecked_arithmetic.rs", "crates/storage/src/lib.rs", []),
     ("unchecked_arithmetic.rs", "crates/types/tests/arith.rs", []),
     ("checked_arithmetic.rs", "crates/types/src/lib.rs", []),
@@ -145,17 +142,12 @@ def closing(code, open_):
 
 
 def unchecked_arithmetic(path, code):
-    """Errors for wrapping, saturating and unchecked arithmetic and `as` casts outside test modules."""
+    """Errors for wrapping, saturating and unchecked arithmetic outside test modules."""
     for m in reversed(list(TEST_MODULE.finditer(code))):
         end = closing(code, m.end() - 1)
         code = code[:m.start()] + re.sub(r"[^\n]", " ", code[m.start():end + 1]) + code[end + 1:]
-    errors = [(m.start(), f"unchecked arithmetic `{m.group(0)}`; use the checked form or "
-               "granite_types::arith") for m in UNCHECKED.finditer(code)]
-    # `use a as b` renames; the statement starts after the last `;` or `}`.
-    errors += [(m.start(), "`as` cast, which can truncate or round; use From or TryFrom")
-               for m in AS_CAST.finditer(code)
-               if not USE.match(code, max(code.rfind(";", 0, m.start()), code.rfind("}", 0, m.start())) + 1)]
-    return [f"{path}:{line_of(code, at)}: {what} (docs/coding-rules.md)" for at, what in sorted(errors)]
+    return [f"{path}:{line_of(code, m.start())}: unchecked arithmetic `{m.group(0)}`; use the checked "
+            "form or granite_types::arith (docs/coding-rules.md)" for m in UNCHECKED.finditer(code)]
 
 
 def source_violations(path, text):
@@ -190,10 +182,10 @@ def manifest_violations(path, text):
     return [f"{path}: depends on {name}, a random-number crate" for name in sorted(names & RANDOM_CRATES)]
 
 
-def clippy(scope, cwd, env=None, capture=False):
-    """Runs every clippy pass; returns (passed, output)."""
+def clippy(scope, cwd, env=None, capture=False, passes=CLIPPY_PASSES):
+    """Runs the clippy passes; returns (passed, output)."""
     ok, out = True, ""
-    for args in CLIPPY_PASSES:
+    for args in passes:
         r = subprocess.run(["cargo", "clippy", *scope, *args], cwd=cwd, env=env, text=True,
                            stdout=subprocess.PIPE if capture else None, stderr=subprocess.STDOUT if capture else None)
         ok, out = ok and r.returncode == 0, out + (r.stdout or "")
@@ -245,7 +237,8 @@ def self_test():
             found = manifest_violations(path, text)
         else:
             env = dict(os.environ, CLIPPY_CONF_DIR=str(clippy_conf_dir(path)))
-            ok, out = clippy(["-p", fixture.removesuffix(".rs")], ws, env, capture=True)
+            passes = CLIPPY_PASSES + [AS_PASS] * path.startswith(CHECKED_CRATES)
+            ok, out = clippy(["-p", fixture.removesuffix(".rs")], ws, env, capture=True, passes=passes)
             found = source_violations(path, text)
         out += "".join(e + "\n" for e in found)
         rejected = not ok or bool(found)
@@ -270,6 +263,7 @@ def main():
     print(f"lint self-test: {len(FIXTURE_CASES)} fixtures rejected or accepted as expected")
 
     ok, _ = clippy(["--workspace"], ROOT)
+    ok &= clippy([a for p in CHECKED_PACKAGES for a in ("-p", p)], ROOT, passes=[AS_PASS])[0]
     files = subprocess.run(["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"], cwd=ROOT,
                            check=True, stdout=subprocess.PIPE, text=True).stdout.rstrip("\0").split("\0")
     files = [f for f in files if not f.startswith("tools/lint-fixtures/") and (ROOT / f).exists()]

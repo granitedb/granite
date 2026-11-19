@@ -38,3 +38,13 @@ pub fn truncate(a: u64) -> u8 {
 pub fn inferred(a: i64) -> u32 {
     a as _
 }
+
+pub fn through_a_path(a: u64) -> u8 {
+    a as core::primitive::u8
+}
+
+pub fn through_an_alias(a: u64) -> Small {
+    a as Small
+}
+
+pub type Small = u8;

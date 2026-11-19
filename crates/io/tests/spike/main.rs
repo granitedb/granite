@@ -17,16 +17,14 @@
 //! starts, the same way for both versions. The test binary counts
 //! allocations, for the decision's comparison.
 
-#![allow(unsafe_code, reason = "a global allocator is an unsafe trait")]
-
 mod callbacks;
+#[path = "../common/counting_alloc.rs"]
+mod counting_alloc;
 mod futures;
 
 use granite_io::memory::{Hub, Memory, SplitMix64};
 use granite_io::message_pool::{Message, MessagePool, SECTOR_SIZE};
 use granite_io::{Completion, Connection, Io, Network, Peer};
-use std::alloc::{GlobalAlloc, Layout, System};
-use std::cell::Cell;
 
 pub const NODES: usize = 3;
 pub const OPS: usize = 8;
@@ -203,9 +201,9 @@ fn run<N: Node>(seed: u64, crash_at: Option<u64>) -> Run {
 
 /// Calls `call`, adding the allocations it makes to `allocations`.
 fn counted<T>(allocations: &mut u64, call: impl FnOnce() -> T) -> T {
-    let before = ALLOCATIONS.get();
+    let before = counting_alloc::allocations();
     let result = call();
-    *allocations += ALLOCATIONS.get() - before;
+    *allocations += counting_alloc::allocations() - before;
     result
 }
 
@@ -274,41 +272,3 @@ fn allocations_per_operation() {
     assert_eq!(callbacks.allocations, [0, 0]);
     assert!(futures.allocations[0] > 0);
 }
-
-struct Counting;
-
-thread_local! {
-    // `const` initialisation, so reading it never allocates.
-    static ALLOCATIONS: Cell<u64> = const { Cell::new(0) };
-}
-
-fn count() {
-    ALLOCATIONS.set(ALLOCATIONS.get() + 1);
-}
-
-// SAFETY: every call is forwarded unchanged to the system allocator; the
-// counter has no effect on the memory handed out.
-unsafe impl GlobalAlloc for Counting {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        count();
-        // SAFETY: the caller's contract for `alloc` is passed on.
-        unsafe { System.alloc(layout) }
-    }
-    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
-        count();
-        // SAFETY: the caller's contract for `alloc_zeroed` is passed on.
-        unsafe { System.alloc_zeroed(layout) }
-    }
-    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-        count();
-        // SAFETY: the caller's contract for `realloc` is passed on.
-        unsafe { System.realloc(ptr, layout, new_size) }
-    }
-    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        // SAFETY: the caller's contract for `dealloc` is passed on.
-        unsafe { System.dealloc(ptr, layout) }
-    }
-}
-
-#[global_allocator]
-static GLOBAL: Counting = Counting;

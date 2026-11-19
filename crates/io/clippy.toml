@@ -1,0 +1,3 @@
+# The io crate is the one place that may read the clock, start threads and
+# touch files and sockets (docs/coding-rules.md), so it does not inherit the
+# bans of the root clippy.toml.

@@ -1,0 +1,14 @@
+# Rejected: a source of randomness outside the io crate. Only the manifest
+# check reads this fixture, so the crate is never fetched.
+[package]
+name = "fixture"
+version = "0.0.0"
+edition = "2024"
+
+[dependencies]
+rand = "0.9"
+entropy = { package = "getrandom", version = "0.3" }
+
+[dev-dependencies]
+# Tests are exempt.
+fastrand = "2"

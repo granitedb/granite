@@ -9,7 +9,7 @@ The project is in its design phase. The most useful contributions right now are 
 - Correctness comes first. Changes to replication, storage or transaction code need simulator coverage, and protocol changes need an updated specification.
 - `just check` must pass before a change is proposed; CI runs the same recipe.
 - Linux-only code (io_uring, direct I/O) is developed on macOS in a local Linux virtual machine: see [docs/linux-vm.md](docs/linux-vm.md).
-- Follow the determinism rules in [docs/06-testing-and-engineering.md](docs/06-testing-and-engineering.md) section 3.
+- Follow the determinism rules in [docs/06-testing-and-engineering.md](docs/06-testing-and-engineering.md) section 3. [docs/coding-rules.md](docs/coding-rules.md) says how `just lint` enforces each one and how to request an exception.
 
 ## Dependencies
 

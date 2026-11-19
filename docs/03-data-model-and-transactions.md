@@ -125,6 +125,7 @@ number      = digit { digit }                                  decimal, at most 
 Strictness:
 - No implicit conversion between any two types. Explicit casts are checked and fail on loss.
 - Overflow, division by zero, invalid UTF-8, length over max, unknown enum value: the event fails with a typed error code. Nothing is truncated or wrapped.
+- Arithmetic takes operands of one type and returns that type. Decimal(P, S) keeps scale S: a product is a*b/10^S and a quotient a*10^S/b, and each fails with loss of precision unless it is whole. Integer division truncates toward zero; the remainder has the dividend's sign. A result that does not fit P digits, or the integer's range, is overflow (`granite_types::arith`).
 - Default is NOT NULL. Defaults must be constants.
 - Row size has a static upper bound computed from the schema (section 2.4); it must fit the message size with headroom, otherwise the schema is rejected.
 

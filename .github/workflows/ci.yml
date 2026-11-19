@@ -57,7 +57,7 @@ jobs:
       # The steps below are `just check`, one recipe per step so a failure names its cause.
       - name: Steps match just check
         run: |
-          test "$(just --show check | grep '^check:')" = "check: crate-graph fmt-check lint test doc gateway roadmap-plan deny" \
+          test "$(just --show check | grep '^check:')" = "check: crate-graph fmt-check lint test test-release doc gateway roadmap-plan deny" \
             || { echo "::error::The check recipe changed; update the steps in .github/workflows/ci.yml"; exit 1; }
 
       - name: Crate graph
@@ -71,6 +71,9 @@ jobs:
 
       - name: Test
         run: just test
+
+      - name: Test in the release profile
+        run: just test-release
 
       - name: API docs
         run: just doc

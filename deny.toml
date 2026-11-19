@@ -31,6 +31,9 @@ allow = [
     "ISC",
     "MIT",
     "MIT-0",
+    # University of Illinois/NCSA, permissive: LLVM's libFuzzer, bundled by
+    # libfuzzer-sys in the fuzz targets only.
+    "NCSA",
     "Unicode-3.0",
     "Unicode-DFS-2016",
     "Zlib",

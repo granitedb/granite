@@ -40,10 +40,11 @@ lint:
 gateway:
     cargo clippy --manifest-path gateway/Cargo.toml --all-targets --locked -- -D warnings
 
-# Check dependency licences, advisories, bans and sources (deny.toml), for the workspace and the gateway.
+# Check dependency licences, advisories, bans and sources (deny.toml), for the workspace, the gateway and the fuzz targets.
 deny:
     cargo deny --locked check
     cargo deny --locked --manifest-path gateway/Cargo.toml check
+    cargo deny --locked --manifest-path fuzz/Cargo.toml check
 
 # Run the granite binary, for example `just run version`.
 run *args:

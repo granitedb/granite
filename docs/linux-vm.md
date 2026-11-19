@@ -15,7 +15,7 @@ Nothing else is needed on the host; Rust inside the VM is installed by the VM it
 
 ```bash
 just vm-up      # create and start the VM (first run takes a few minutes)
-just vm-check   # check kernel, toolchain and direct I/O inside the VM
+just vm-check   # check kernel, toolchain, direct I/O and the io_uring backend inside the VM
 just vm-shell   # a shell inside the VM, in the repository
 just vm-down    # delete the VM and its data disk
 ```
@@ -29,12 +29,14 @@ just vm-down    # delete the VM and its data disk
 | Instance name | `granite` | `tools/vm/vm.sh` |
 | Image | Ubuntu 24.04 server cloud image `release-20260321`, arm64 or amd64 to match the host | URL and sha256 digest in `tools/vm/granite.yaml` |
 | Kernel | `6.8.0-106-generic` | comes with the image; `apt-mark hold` and disabled automatic upgrades keep it; `pinned_kernel` in `tools/vm/check.sh` |
-| Minimum kernel | 5.6 | `tools/vm/check.sh` |
+| Minimum kernel | 5.6 | `MIN_KERNEL` in `crates/io/src/uring.rs`, and `min_kernel` in `tools/vm/check.sh` |
 | Rust | 1.96.1 | `rust-toolchain.toml`, installed by Ubuntu's `rustup` package |
 | Data disk | `granite-data`, 4 GiB raw, ext4, mounted at `/mnt/lima-granite-data` | `tools/vm/granite.yaml` |
 | Resources | 4 CPUs, 8 GiB memory | `tools/vm/granite.yaml` |
 
-The minimum kernel of 5.6 is the first one with every io_uring operation the design uses: registered files and buffers (5.1), accept and connect (5.5), send and receive (5.6). The io_uring backend (T0.3.2) states the final minimum; when it does, `min_kernel` in `tools/vm/check.sh` follows it.
+The minimum kernel of 5.6 is the first one with every io_uring operation the design uses: registered files and buffers (5.1), accept and connect (5.5), send and receive (5.6). It is the minimum of the io_uring backend, which refuses to start on an older kernel with an error naming both versions; a test in `crates/io/src/uring.rs` fails if `min_kernel` in `tools/vm/check.sh` differs from it.
+
+The backend registers the shard's message pool with the kernel, and registered memory counts against `RLIMIT_MEMLOCK` (`ulimit -l`, 8 MiB by default on Ubuntu 24.04), so the limit must cover the pool. The tests keep their pools at 4 MiB or less and run one at a time.
 
 Tests that open files with `O_DIRECT` put them on the data disk, not in the repository. The shared folder (virtiofs) accepts `O_DIRECT`, but the write reaches a file on the host through FUSE and the host's page cache, so it says nothing about direct I/O on a block device. Inside the VM, Cargo builds into `/var/tmp/granite-target`, so Linux builds do not overwrite the host's `target/`.
 
@@ -42,7 +44,9 @@ Tests that open files with `O_DIRECT` put them on the data disk, not in the repo
 
 - the kernel is the pinned one and at least the minimum, and io_uring is not disabled by `kernel.io_uring_disabled`;
 - `rustc` matches `rust-toolchain.toml`;
-- one sector written to the data disk by `dd oflag=direct,dsync` is opened with both `O_DIRECT` and `O_DSYNC` (checked in an `strace` of the `openat` call) and reads back unchanged with `O_DIRECT`.
+- one sector written to the data disk by `dd oflag=direct,dsync` is opened with both `O_DIRECT` and `O_DSYNC` (checked in an `strace` of the `openat` call) and reads back unchanged with `O_DIRECT`;
+- the io crate's tests pass with their data files on the data disk, including the io_uring backend's storage conformance suite, fault injection, kill and allocation tests;
+- an `strace` of the storage conformance suite on io_uring shows the data file opened with `O_DIRECT` and `O_DSYNC`, and no `read`, `write`, `pread`, `pwrite` or vectored variant on it until it is closed.
 
 ## Changing the image
 

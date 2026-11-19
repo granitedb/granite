@@ -1,20 +1,21 @@
 //! The conformance suite every backend of the [`Io`] traits passes (first
 //! version). A backend's tests call [`run`] with two fresh nodes that can
-//! connect to each other.
+//! connect to each other, or [`run_storage`] for a backend of [`Storage`]
+//! alone.
 
 use crate::message_pool::{MESSAGE_SIZE, Message, MessagePool, SECTOR_SIZE};
-use crate::traits::{Completion, Connection, Full, Io, NetworkError, Peer, Zone};
+use crate::traits::{Completion, Connection, Full, Io, NetworkError, Peer, Storage, Zone};
 
 /// Polls before a backend is taken to have lost a completion.
 const POLLS_MAX: u32 = 10_000_000;
 
 /// Runs every check on `nodes`: two freshly made nodes, each with the peer
-/// id the other connects to it by. Every zone is at least four sectors.
+/// id the other connects to it by. Every zone is at least four sectors, the
+/// grid at least two messages, and each node holds at least four operations
+/// in flight.
 pub fn run<I: Io>(mut nodes: [(I, Peer); 2]) {
     let pool = MessagePool::new(8);
-    storage_round_trip(&mut nodes, &pool);
-    completes_once(&mut nodes, &pool);
-    full_returns_the_submission(&mut nodes, &pool);
+    run_storage(&mut nodes[0].0, I::poll, &pool);
     messages_arrive_whole_and_in_order(&mut nodes, &pool);
     close_fails_both_ends(&mut nodes, &pool);
     clocks_and_random(&mut nodes[0].0);
@@ -25,6 +26,27 @@ pub fn run<I: Io>(mut nodes: [(I, Peer); 2]) {
         );
     }
     assert_eq!(pool.counters().in_use, 0, "every buffer came back");
+}
+
+/// Runs the storage checks on `storage`, a fresh data file whose
+/// completions `poll` returns. Its buffers come from `pool`, which has at
+/// least four free. Every zone is at least four sectors, the grid at least
+/// two messages, and the backend holds at least four operations in flight.
+pub fn run_storage<S: Storage>(
+    storage: &mut S,
+    mut poll: impl FnMut(&mut S) -> Option<Completion>,
+    pool: &MessagePool,
+) {
+    let in_use = pool.counters().in_use;
+    storage_round_trip(storage, &mut poll, pool);
+    completes_once(storage, &mut poll, pool);
+    full_returns_the_submission(storage, &mut poll, pool);
+    many_in_flight(storage, &mut poll, pool);
+    assert!(
+        poll(storage).is_none(),
+        "no completion beyond the submitted ones"
+    );
+    assert_eq!(pool.counters().in_use, in_use, "every buffer came back");
 }
 
 /// Polls both nodes until `count` completions arrived, and returns them with
@@ -45,34 +67,50 @@ fn collect<I: Io>(nodes: &mut [(I, Peer); 2], count: usize) -> Vec<(usize, Compl
     panic!("{} of {count} completions arrived", completions.len());
 }
 
+/// Polls `storage` until `count` completions arrived.
+fn drain<S, P>(storage: &mut S, poll: &mut P, count: usize) -> Vec<Completion>
+where
+    P: FnMut(&mut S) -> Option<Completion>,
+{
+    let mut completions = Vec::with_capacity(count);
+    for _ in 0..POLLS_MAX {
+        if completions.len() == count {
+            return completions;
+        }
+        completions.extend(poll(storage));
+    }
+    panic!("{} of {count} completions arrived", completions.len());
+}
+
 fn filled(pool: &MessagePool, byte: u8) -> Message {
     let mut message = pool.acquire().expect("pool has room");
     message.bytes_mut().expect("only handle").fill(byte);
     message
 }
 
-fn storage_round_trip<I: Io>(nodes: &mut [(I, Peer); 2], pool: &MessagePool) {
+fn storage_round_trip<S, P>(storage: &mut S, poll: &mut P, pool: &MessagePool)
+where
+    S: Storage,
+    P: FnMut(&mut S) -> Option<Completion>,
+{
     let sector = SECTOR_SIZE as u32;
     for zone in Zone::ALL {
-        let size = nodes[0].0.size(zone);
+        let size = storage.size(zone);
         assert!(size >= 4 * u64::from(sector));
         let last = size - u64::from(sector);
         // Two sectors at the start, one at the end; the second sector from
         // the end is never written.
         for (offset, len, byte) in [(0, 2 * sector, 0xa1), (last, sector, 0xb2)] {
-            let io = &mut nodes[0].0;
-            io.write(1, zone, offset, len, filled(pool, byte))
+            storage
+                .write(1, zone, offset, len, filled(pool, byte))
                 .expect("room");
             let [
-                (
-                    _,
-                    Completion::Write {
-                        tag: 1,
-                        buffer,
-                        result: Ok(()),
-                    },
-                ),
-            ] = &collect(nodes, 1)[..]
+                Completion::Write {
+                    tag: 1,
+                    buffer,
+                    result: Ok(()),
+                },
+            ] = &drain(storage, poll, 1)[..]
             else {
                 panic!("expected the write's completion");
             };
@@ -84,20 +122,16 @@ fn storage_round_trip<I: Io>(nodes: &mut [(I, Peer); 2], pool: &MessagePool) {
             (last, sector, 0xb2),
             (unwritten, sector, 0),
         ] {
-            nodes[0]
-                .0
+            storage
                 .read(2, zone, offset, len, filled(pool, 0x5a))
                 .expect("room");
             let [
-                (
-                    _,
-                    Completion::Read {
-                        tag: 2,
-                        buffer,
-                        result: Ok(()),
-                    },
-                ),
-            ] = &collect(nodes, 1)[..]
+                Completion::Read {
+                    tag: 2,
+                    buffer,
+                    result: Ok(()),
+                },
+            ] = &drain(storage, poll, 1)[..]
             else {
                 panic!("expected the read's completion");
             };
@@ -112,41 +146,48 @@ fn storage_round_trip<I: Io>(nodes: &mut [(I, Peer); 2], pool: &MessagePool) {
             );
         }
     }
-    nodes[0].0.fsync(3).expect("room");
-    let completions = collect(nodes, 1);
+    storage.fsync(3).expect("room");
     assert!(matches!(
-        completions[..],
-        [(
-            0,
-            Completion::Fsync {
-                tag: 3,
-                result: Ok(())
-            }
-        )]
+        drain(storage, poll, 1)[..],
+        [Completion::Fsync {
+            tag: 3,
+            result: Ok(())
+        }]
     ));
 }
 
-fn completes_once<I: Io>(nodes: &mut [(I, Peer); 2], pool: &MessagePool) {
-    let io = &mut nodes[0].0;
+fn completes_once<S, P>(storage: &mut S, poll: &mut P, pool: &MessagePool)
+where
+    S: Storage,
+    P: FnMut(&mut S) -> Option<Completion>,
+{
     assert!(
-        io.poll().is_none(),
+        poll(storage).is_none(),
         "nothing completes before it is submitted"
     );
     let sector = SECTOR_SIZE as u32;
-    io.write(10, Zone::Grid, 0, sector, filled(pool, 1))
+    storage
+        .write(10, Zone::Grid, 0, sector, filled(pool, 1))
         .expect("room");
-    io.read(11, Zone::Superblock, 0, sector, filled(pool, 2))
+    storage
+        .read(11, Zone::Superblock, 0, sector, filled(pool, 2))
         .expect("room");
-    io.fsync(12).expect("room");
-    let mut tags: Vec<_> = collect(nodes, 3).iter().map(|(_, c)| c.tag()).collect();
+    storage.fsync(12).expect("room");
+    let mut tags: Vec<_> = drain(storage, poll, 3)
+        .iter()
+        .map(Completion::tag)
+        .collect();
     tags.sort_unstable();
     assert_eq!(tags, [10, 11, 12]);
 }
 
-fn full_returns_the_submission<I: Io>(nodes: &mut [(I, Peer); 2], pool: &MessagePool) {
-    let io = &mut nodes[0].0;
+fn full_returns_the_submission<S, P>(storage: &mut S, poll: &mut P, pool: &MessagePool)
+where
+    S: Storage,
+    P: FnMut(&mut S) -> Option<Completion>,
+{
     let mut accepted = 0;
-    while io.fsync(20).is_ok() {
+    while storage.fsync(20).is_ok() {
         accepted += 1;
         assert!(
             accepted < POLLS_MAX,
@@ -155,7 +196,7 @@ fn full_returns_the_submission<I: Io>(nodes: &mut [(I, Peer); 2], pool: &Message
     }
     let buffer = filled(pool, 3);
     let address = buffer.bytes().as_ptr();
-    let Err(Full(back)) = io.read(21, Zone::Grid, 0, SECTOR_SIZE as u32, buffer) else {
+    let Err(Full(back)) = storage.read(21, Zone::Grid, 0, SECTOR_SIZE as u32, buffer) else {
         panic!("a full backend refuses a read");
     };
     assert_eq!(
@@ -164,9 +205,76 @@ fn full_returns_the_submission<I: Io>(nodes: &mut [(I, Peer); 2], pool: &Message
         "the refused buffer comes back"
     );
     // One completion makes room for one submission.
-    collect(nodes, 1);
-    nodes[0].0.fsync(20).expect("room after a completion");
-    collect(nodes, accepted as usize);
+    drain(storage, poll, 1);
+    storage.fsync(20).expect("room after a completion");
+    drain(storage, poll, accepted as usize);
+}
+
+/// Four writes of sizes from one sector to a whole message, in flight at
+/// once, then reads of the same ranges, in flight at once.
+fn many_in_flight<S, P>(storage: &mut S, poll: &mut P, pool: &MessagePool)
+where
+    S: Storage,
+    P: FnMut(&mut S) -> Option<Completion>,
+{
+    let sector = SECTOR_SIZE as u32;
+    let lens = [
+        sector,
+        3 * sector,
+        MESSAGE_SIZE as u32 / 2,
+        MESSAGE_SIZE as u32,
+    ];
+    let mut ranges = [(0, 0); 4];
+    let mut offset = 0;
+    for (tag, len) in lens.into_iter().enumerate() {
+        ranges[tag] = (offset, len);
+        offset += u64::from(len);
+    }
+    assert!(offset <= storage.size(Zone::Grid));
+    for (tag, &(offset, len)) in ranges.iter().enumerate() {
+        let buffer = filled(pool, 0x30 + tag as u8);
+        storage
+            .write(tag as u64, Zone::Grid, offset, len, buffer)
+            .expect("room");
+    }
+    let mut buffers: Vec<_> = drain(storage, poll, 4)
+        .into_iter()
+        .map(|completion| match completion {
+            Completion::Write {
+                tag,
+                mut buffer,
+                result: Ok(()),
+            } => {
+                buffer.bytes_mut().expect("only handle").fill(0);
+                (tag, buffer)
+            }
+            other => panic!("expected a write's completion: {other:?}"),
+        })
+        .collect();
+    buffers.sort_by_key(|(tag, _)| *tag);
+    for (tag, buffer) in buffers {
+        let (offset, len) = ranges[tag as usize];
+        storage
+            .read(tag, Zone::Grid, offset, len, buffer)
+            .expect("room");
+    }
+    for completion in drain(storage, poll, 4) {
+        let Completion::Read {
+            tag,
+            buffer,
+            result: Ok(()),
+        } = completion
+        else {
+            panic!("expected a read's completion: {completion:?}");
+        };
+        let len = ranges[tag as usize].1 as usize;
+        let bytes = buffer.bytes();
+        assert!(
+            bytes[..len].iter().all(|&b| b == 0x30 + tag as u8),
+            "range {tag}"
+        );
+        assert!(bytes[len..].iter().all(|&b| b == 0), "bytes past len kept");
+    }
 }
 
 /// Node 1 connects to node 0; returns node 0's end, then node 1's.

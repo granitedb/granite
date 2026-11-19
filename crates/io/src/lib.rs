@@ -4,6 +4,8 @@ pub mod conformance;
 pub mod memory;
 pub mod message_pool;
 pub mod traits;
+#[cfg(target_os = "linux")]
+pub mod uring;
 
 pub use traits::{
     Completion, Connection, Full, Io, Network, NetworkError, Peer, Random, Storage, StorageError,

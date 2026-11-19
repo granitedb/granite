@@ -25,6 +25,7 @@ FIXTURES = ROOT / "tools" / "lint-fixtures"
 # SIMD kernels). Add a file here in the change that needs it, with its reason.
 UNSAFE_MODULES = {
     "crates/io/src/message_pool.rs",  # the message pool
+    "crates/io/src/uring.rs",  # io_uring submissions and registered buffers
     "crates/io/tests/common/counting_alloc.rs",  # the counting global allocator of the io tests
     "crates/base/src/checksum/simd.rs",  # checksum SIMD kernels
     "crates/base/src/checksum/aegis.rs",  # test-only kernels of decision 0002

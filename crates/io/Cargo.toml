@@ -13,3 +13,10 @@ workspace = true
 
 [dependencies]
 granite-base.workspace = true
+
+# The io_uring backend (docs/06 section 5). libc is already a dependency of
+# io-uring; it gives the open flags and errno values, which differ by
+# architecture.
+[target.'cfg(target_os = "linux")'.dependencies]
+io-uring = "0.7.16"
+libc = "0.2"

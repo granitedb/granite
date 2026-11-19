@@ -2,14 +2,14 @@
 //! the trait preconditions hold.
 
 use granite_io::memory::{Hub, Memory};
-use granite_io::message_pool::{MessagePool, SECTOR_SIZE};
+use granite_io::message_pool::{MESSAGE_SIZE, MessagePool, SECTOR_SIZE};
 use granite_io::{Completion, Connection, Io, Network, NetworkError, Peer, Storage, Zone};
 
 const ZONES: [u64; 4] = [
     4 * SECTOR_SIZE as u64,
     4 * SECTOR_SIZE as u64,
     8 * SECTOR_SIZE as u64,
-    16 * SECTOR_SIZE as u64,
+    2 * MESSAGE_SIZE as u64,
 ];
 
 fn pair(seed: u64) -> [(Memory, Peer); 2] {

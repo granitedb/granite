@@ -15,11 +15,12 @@ use granite_io::memory::SplitMix64;
 use granite_io::message_pool::{MESSAGE_SIZE, Message, MessagePool, SECTOR_SIZE};
 use granite_io::uring::Uring;
 use granite_io::{Completion, Storage, Zone};
-use std::io::{BufRead, BufReader, Read};
+use std::io::{BufRead, BufReader, ErrorKind, Read};
 use std::os::unix::process::ExitStatusExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
+use std::time::Duration;
 
 const SECTOR: u64 = SECTOR_SIZE as u64;
 
@@ -55,13 +56,33 @@ fn wait(storage: &mut Uring) -> Completion {
     }
 }
 
+/// Opens the backend on `path`. The kernel gives a closed ring's registered
+/// memory back to `ulimit -l` asynchronously, so a ring opened just after
+/// another one closed (an earlier test's, or a killed child's) can be
+/// refused for a moment; such an open is retried for up to five seconds.
+fn open(path: &Path, zones: [u64; 4], capacity: u32, pool: &MessagePool) -> Uring {
+    for _ in 0..500 {
+        match Uring::open(path, zones, capacity, pool) {
+            Err(e) if e.kind() == ErrorKind::OutOfMemory => {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            opened => return opened.unwrap(),
+        }
+    }
+    let limits = std::fs::read_to_string("/proc/self/limits").unwrap();
+    let memlock = limits
+        .lines()
+        .find(|line| line.starts_with("Max locked memory"));
+    panic!("the pool did not fit in the locked-memory limit within 5 s: {memlock:?}");
+}
+
 #[test]
 fn uring_passes_the_storage_conformance_suite() {
     let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let scratch = Scratch::new("conformance");
     let pool = MessagePool::new(4);
     let zones = [4 * SECTOR, 4 * SECTOR, 8 * SECTOR, 2 * MESSAGE_SIZE as u64];
-    let mut storage = Uring::open(&scratch.data(), zones, 8, &pool).unwrap();
+    let mut storage = open(&scratch.data(), zones, 8, &pool);
     granite_io::conformance::run_storage(&mut storage, Uring::poll, &pool);
 }
 
@@ -128,7 +149,7 @@ fn completed_writes_survive_sigkill() {
         );
 
         let pool = MessagePool::new(1);
-        let mut storage = Uring::open(&scratch.data(), kill_zones(), 1, &pool).unwrap();
+        let mut storage = open(&scratch.data(), kill_zones(), 1, &pool);
         let len = (wanted * SECTOR) as u32;
         storage
             .read(0, Zone::Grid, 0, len, pool.acquire().unwrap())
@@ -159,7 +180,7 @@ fn kill_child(setting: &str) -> ! {
     let (iteration, path) = setting.split_once(' ').unwrap();
     let iteration: u64 = iteration.parse().unwrap();
     let pool = MessagePool::new(1);
-    let mut storage = Uring::open(path.as_ref(), kill_zones(), 1, &pool).unwrap();
+    let mut storage = open(Path::new(path), kill_zones(), 1, &pool);
     let mut buffer = pool.acquire().unwrap();
     for sector in 0..KILL_SECTORS {
         let bytes = buffer.bytes_mut().unwrap();
@@ -219,7 +240,7 @@ fn a_million_mixed_operations_allocate_nothing_after_startup() {
     let scratch = Scratch::new("allocations");
     let pool = MessagePool::new(SLOTS as u32);
     let zones = [SECTOR, SECTOR, SECTOR, GRID_SECTORS * SECTOR];
-    let mut storage = Uring::open(&scratch.data(), zones, SLOTS as u32, &pool).unwrap();
+    let mut storage = open(&scratch.data(), zones, SLOTS as u32, &pool);
     let mut random = SplitMix64(0x61_6c6c_6f63);
     // A slot's buffer is idle, in an operation, or parked during its fsync.
     let mut idle: [Option<Message>; SLOTS as usize] = std::array::from_fn(|_| pool.acquire());

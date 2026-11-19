@@ -119,6 +119,7 @@ jobs:
         run: |
           uname -a
           echo "kernel.io_uring_disabled = $(cat /proc/sys/kernel/io_uring_disabled 2>/dev/null || echo 'not present')"
+          echo "locked-memory limit (ulimit -l, KiB): $(ulimit -l)"
 
       - name: Install fio
         run: sudo apt-get update && sudo apt-get install -y fio

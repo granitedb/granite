@@ -32,7 +32,7 @@ pub fn encode_key(columns: &[(Type, Order)], values: &[Value]) -> Result<Vec<u8>
 /// [`encode_key`], rejecting a key longer than `FORMAT.primary_key_size_max`.
 pub fn encode_primary_key(columns: &[(Type, Order)], values: &[Value]) -> Result<Vec<u8>, Error> {
     let key = encode_key(columns, values)?;
-    let size = key.len() as u64;
+    let size = crate::len64(key.len());
     if size > FORMAT.primary_key_size_max {
         return Err(Error::KeyTooLarge { size });
     }
@@ -190,7 +190,7 @@ fn decode_value(ty: &Type, r: &mut Reader) -> Result<Value, Error> {
             Value::String(String::from_utf8(unescape(r)?).map_err(|_| Error::InvalidUtf8)?)
         }
         Type::Bytes { .. } => Value::Bytes(unescape(r)?),
-        Type::FixedBytes(n) => Value::FixedBytes(r.take_vec(*n as usize)?),
+        Type::FixedBytes(n) => Value::FixedBytes(r.take_vec(crate::usize32(*n))?),
         Type::Enum8 { .. } => Value::Enum8(u8::from_be_bytes(r.take()?)),
         Type::Enum16 { .. } => Value::Enum16(u16::from_be_bytes(r.take()?)),
         Type::F32 | Type::F64 | Type::Nullable(_) | Type::LowCardinality(_) => {

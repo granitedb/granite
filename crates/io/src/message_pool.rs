@@ -110,6 +110,17 @@ impl MessagePool {
         })
     }
 
+    /// Start and length of the memory every buffer lies in, and a handle
+    /// that keeps it allocated, so a backend can register it with the
+    /// kernel.
+    #[cfg(target_os = "linux")]
+    pub(crate) fn memory(&self) -> (MessagePool, *mut u8, usize) {
+        let pool = MessagePool {
+            inner: Rc::clone(&self.inner),
+        };
+        (pool, self.inner.memory.as_ptr(), self.inner.layout.size())
+    }
+
     /// The pool's counters.
     pub fn counters(&self) -> PoolCounters {
         PoolCounters {

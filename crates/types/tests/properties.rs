@@ -3,8 +3,13 @@
 
 use granite_types::key::{Order, decode_key, encode_key};
 use granite_types::storage::{decode_fixed, encode_fixed};
-use granite_types::{CANONICAL_NAN_F32, CANONICAL_NAN_F64, I256, TimePrecision, Type, U256, Value};
+use granite_types::{
+    CANONICAL_NAN_F32, CANONICAL_NAN_F64, Error, I256, TimePrecision, Type, U256, Value,
+};
 use std::cmp::Ordering;
+
+mod reference;
+use reference::Big;
 
 const PAIRS: u32 = 1_000_000;
 
@@ -110,28 +115,13 @@ fn edges(ty: &Type) -> Vec<Value> {
         Type::I64 => vec![V::I64(i64::MIN), V::I64(0), V::I64(i64::MAX)],
         Type::I128 => vec![V::I128(i128::MIN), V::I128(0), V::I128(i128::MAX)],
         Type::I256 => vec![V::I256(I256::MIN), V::I256(i256(0, 0)), V::I256(I256::MAX)],
-        Type::Decimal { precision, .. } => match granite_types::decimal_width(*precision) {
-            4 => vec![
-                V::Decimal32(i32::MIN),
-                V::Decimal32(0),
-                V::Decimal32(i32::MAX),
-            ],
-            8 => vec![
-                V::Decimal64(i64::MIN),
-                V::Decimal64(0),
-                V::Decimal64(i64::MAX),
-            ],
-            16 => vec![
-                V::Decimal128(i128::MIN),
-                V::Decimal128(0),
-                V::Decimal128(i128::MAX),
-            ],
-            _ => vec![
-                V::Decimal256(I256::MIN),
-                V::Decimal256(i256(0, 0)),
-                V::Decimal256(I256::MAX),
-            ],
-        },
+        Type::Decimal { .. } => {
+            let (min, max) = reference::range(ty);
+            [min, Big::zero(), max]
+                .iter()
+                .map(|m| reference::value(ty, m).unwrap())
+                .collect()
+        }
         Type::F32 => vec![V::F32(f32::MIN), V::F32(0.0), V::F32(f32::MAX)],
         Type::F64 => vec![V::F64(f64::MIN), V::F64(0.0), V::F64(f64::MAX)],
         Type::Bool => vec![V::Bool(false), V::Bool(true)],
@@ -183,12 +173,19 @@ fn random(ty: &Type, rng: &mut Rng) -> Value {
         Type::I64 => V::I64(rng.u128() as i64),
         Type::I128 => V::I128(rng.u128() as i128),
         Type::I256 => V::I256(i256(rng)),
-        Type::Decimal { precision, .. } => match granite_types::decimal_width(*precision) {
-            4 => V::Decimal32(rng.u128() as i32),
-            8 => V::Decimal64(rng.u128() as i64),
-            16 => V::Decimal128(rng.u128() as i128),
-            _ => V::Decimal256(i256(rng)),
-        },
+        // As the integer of the same width, truncated toward zero into ±(10^P - 1).
+        Type::Decimal { precision, .. } => {
+            let p = u32::from(*precision);
+            match granite_types::decimal_width(*precision) {
+                4 => V::Decimal32(rng.u128() as i32 % 10i32.pow(p)),
+                8 => V::Decimal64(rng.u128() as i64 % 10i64.pow(p)),
+                16 => V::Decimal128(rng.u128() as i128 % 10i128.pow(p)),
+                _ => {
+                    let x = Big::from_bits256(rng.u128(), rng.u128(), true);
+                    reference::value(ty, &x.div_rem(&Big::pow(10, p)).1).unwrap()
+                }
+            }
+        }
         Type::F32 => V::F32(f32::from_bits(rng.next() as u32)),
         Type::F64 => V::F64(f64::from_bits(rng.next())),
         Type::Bool => V::Bool(rng.next() & 1 == 1),
@@ -465,5 +462,50 @@ fn every_nan_is_canonical() {
         let nan32 = (r as u32 | exp32) | 1 << (r % 23);
         assert!(f32::from_bits(nan32).is_nan());
         assert_eq!(f32_bits(f32::from_bits(nan32)), CANONICAL_NAN_F32);
+    }
+}
+
+/// A Decimal(P, S) mantissa has at most P digits: ±(10^P - 1) is a value and
+/// ±10^P is not, for `check` and for both decoders.
+#[test]
+fn decimal_mantissa_has_at_most_p_digits() {
+    for precision in [5, 9, 18, 38, 76] {
+        let ty = Type::Decimal {
+            precision,
+            scale: 2,
+        };
+        // The integer of the mantissa's width, which encodes to the same bytes.
+        let int = match granite_types::decimal_width(precision) {
+            4 => Type::I32,
+            8 => Type::I64,
+            16 => Type::I128,
+            _ => Type::I256,
+        };
+        let ten = Big::pow(10, u32::from(precision));
+        let one = Big::from_u128(1);
+        for m in [ten.sub(&one), one.sub(&ten), ten.clone(), ten.neg()] {
+            let n = reference::value(&int, &m).unwrap();
+            let d = match n {
+                Value::I32(x) => Value::Decimal32(x),
+                Value::I64(x) => Value::Decimal64(x),
+                Value::I128(x) => Value::Decimal128(x),
+                Value::I256(x) => Value::Decimal256(x),
+                _ => unreachable!(),
+            };
+            let mut fixed = Vec::new();
+            encode_fixed(&int, &n, &mut fixed).unwrap();
+            let key = encode_key(&[(int.clone(), Order::Asc)], &[n]).unwrap();
+            let (check, decoded) = if m.abs() < ten {
+                (Ok(()), Ok(d.clone()))
+            } else {
+                (Err(Error::Overflow), Err(Error::Malformed))
+            };
+            let ctx = format!("{ty:?} {d:?}");
+            assert_eq!(ty.check(&d), check, "check: {ctx}");
+            assert_eq!(decode_fixed(&ty, &fixed), decoded, "decode_fixed: {ctx}");
+            let columns = [(ty.clone(), Order::Asc)];
+            let key = decode_key(&columns, &key);
+            assert_eq!(key, decoded.map(|v| vec![v]), "decode_key: {ctx}");
+        }
     }
 }

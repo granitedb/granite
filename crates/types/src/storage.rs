@@ -152,7 +152,7 @@ pub fn decode_fixed(ty: &Type, bytes: &[u8]) -> Result<Value, Error> {
             unreachable!("fixed_width() and validate() reject them")
         }
     };
-    ty.check(&value)?;
+    ty.check_decoded(&value)?;
     Ok(value)
 }
 

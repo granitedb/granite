@@ -50,7 +50,7 @@ pub fn decode_key(columns: &[(Type, Order)], bytes: &[u8]) -> Result<Vec<Value>,
     for (ty, order) in columns {
         r.mask = if *order == Order::Desc { u8::MAX } else { 0 };
         let value = decode_value(ty, &mut r)?;
-        ty.check(&value)?;
+        ty.check_decoded(&value)?;
         values.push(value);
     }
     if r.pos != bytes.len() {

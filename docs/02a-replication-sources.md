@@ -294,6 +294,7 @@ Every deviation above is linked to a task; none is uncovered.
 | C6 | Section 5, state sync | "from a quorum-confirmed peer" | "the latest durable checkpoint", defined as held by a replication quorum and learned from commit_max, which works because replicas acknowledge prepares beyond a checkpoint only once they hold it; one peer alone is never enough. | TB sync.md › Glossary, › 0: Scenarios and › Syncing Replica. "Quorum-confirmed peer" did not say what was confirmed. The acknowledgement rule is what T2.2.7's gate "acknowledges no prepares beyond what it holds durably" already requires. |
 | C7 | Section 6 | "agrees with a quorum" | "agrees with a replication quorum of clocks" | TB replica.zig passes quorum_replication to the clock. |
 | C8 | Section 7 | Session table update time unstated. | A session entry changes only when its request executes. | N5. |
+| C10 | Section 5, recovery | What a restarted primary does was unstated. | It does not resume its view; it takes status recovering and votes for the next view. | Ours, after this document's review: the model of T2.1.2 identifies a prepare by (op, view), which holds only if no primary assigns an op number twice in one view; a primary that restarted and resumed could. |
 
 Section 0's sentence on quorum-gated suspicion now also says that it matches TigerBeetle (section 2 of this document).
 

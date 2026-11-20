@@ -3,7 +3,7 @@
 //! rejection of non-canonical literals.
 
 use granite_base::constants::FORMAT;
-use granite_txn::{DEPTH_MAX, Error, Expr, IR_VERSION, NODES_MAX, Param, Program, Stmt};
+use granite_txn::{Error, Expr, IR_VERSION, Param, Program, Stmt};
 use granite_types::{Type, Value};
 
 /// IR version 1, an empty name, no parameters, and a body of `n` statements.
@@ -161,10 +161,11 @@ fn nested(depth: u32) -> (Program, Vec<u8>) {
 
 #[test]
 fn depth_is_limited() {
-    let (p, bytes) = nested(DEPTH_MAX);
+    let depth = u32::try_from(FORMAT.program_depth_max).unwrap();
+    let (p, bytes) = nested(depth);
     assert_eq!(p.encode().as_deref(), Ok(&bytes[..]));
     assert_eq!(Program::decode(&bytes), Ok(p));
-    let (p, bytes) = nested(DEPTH_MAX + 1);
+    let (p, bytes) = nested(depth + 1);
     assert_eq!(p.encode(), Err(Error::TooDeep));
     assert_eq!(Program::decode(&bytes), Err(Error::TooDeep));
 }
@@ -172,16 +173,20 @@ fn depth_is_limited() {
 #[test]
 fn node_count_is_limited() {
     // Each `return commit_ts` is two nodes.
-    let n = NODES_MAX / 2;
+    assert!(
+        FORMAT.program_nodes_max.is_multiple_of(2),
+        "the body reaches the limit exactly"
+    );
+    let n = usize::try_from(FORMAT.program_nodes_max / 2).unwrap();
     let mut p = Program {
         name: String::new(),
         params: vec![],
-        body: vec![Stmt::Return(Expr::CommitTs); usize::from(n)],
+        body: vec![Stmt::Return(Expr::CommitTs); n],
     };
     let mut bytes = p.encode().unwrap();
     assert_eq!(Program::decode(&bytes), Ok(p.clone()));
     // One node more: the last becomes `return !commit_ts`.
-    p.body[usize::from(n) - 1] = Stmt::Return(Expr::Not(Box::new(Expr::CommitTs)));
+    p.body[n - 1] = Stmt::Return(Expr::Not(Box::new(Expr::CommitTs)));
     assert_eq!(p.encode(), Err(Error::TooManyNodes));
     bytes.insert(bytes.len() - 1, 7);
     assert_eq!(Program::decode(&bytes), Err(Error::TooManyNodes));
@@ -268,7 +273,7 @@ fn non_canonical_and_invalid_literals_are_rejected() {
 }
 
 /// The decoder's largest allocation is below 2 MiB, the bound of its fuzz
-/// gate: a list holds at most `NODES_MAX` elements and grows to less than
+/// gate: a list holds at most `program_nodes_max` elements and grows to less than
 /// twice that, and names and literals are copies of parts of an input of
 /// at most one message.
 #[test]
@@ -279,7 +284,8 @@ fn decoder_allocations_are_bounded() {
         size_of::<(u16, Expr)>(),
         size_of::<Param>(),
     ];
-    let list = 2 * usize::from(NODES_MAX) * element.iter().max().unwrap();
+    let nodes = usize::try_from(FORMAT.program_nodes_max).unwrap();
+    let list = 2 * nodes * element.iter().max().unwrap();
     let bound = 2 << 20;
     assert!(list < bound, "{list}");
     assert!(FORMAT.message_size_max < bound as u64);

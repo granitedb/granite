@@ -16,15 +16,6 @@ mod encoding;
 /// The version of the IR and its encoding, its first two bytes.
 pub const IR_VERSION: u16 = 1;
 
-/// Deepest nesting of statements and expressions: a statement of the
-/// program's body is at depth 1, and each element is one deeper than the
-/// statement or expression that contains it. Part of IR version 1.
-pub const DEPTH_MAX: u32 = 64;
-
-/// Most statements and expressions in one program, so every list of a
-/// program has a u16 count. Part of IR version 1.
-pub const NODES_MAX: u16 = 10_000;
-
 /// A transaction program: its name, its parameters and its body.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Program {
@@ -160,9 +151,11 @@ pub enum Error {
     UnsupportedVersion = 2,
     /// A statement or expression opcode the IR does not define.
     UnknownOpcode = 3,
-    /// Nesting deeper than [`DEPTH_MAX`].
+    /// Nesting deeper than `FORMAT.program_depth_max`: a statement of the
+    /// program's body is at depth 1, and each element is one deeper than the
+    /// statement or expression that contains it.
     TooDeep = 4,
-    /// More than [`NODES_MAX`] statements and expressions.
+    /// More than `FORMAT.program_nodes_max` statements and expressions.
     TooManyNodes = 5,
     /// An encoding longer than one message.
     TooLarge = 6,

@@ -113,6 +113,11 @@ limits! {
     row_size_max: 64 * KIB,
     /// Reads plus writes per program invocation. Document 03 section 8.
     program_accesses_max: 256,
+    /// Deepest nesting of statements and expressions in a program.
+    /// Document 03 section 8.
+    program_depth_max: 64,
+    /// Statements and expressions in one program. Document 03 section 8.
+    program_nodes_max: 8_000,
     /// Tables per cluster. Document 03 section 8.
     tables_max: 4096,
     /// Programs per cluster. Document 03 section 8.
@@ -284,6 +289,10 @@ impl FormatConstants {
         assert!(
             f.queue_length_max >= f.client_sessions_max,
             "queue length is at least the session capacity of a group"
+        );
+        assert!(
+            f.program_nodes_max <= u16::MAX as u64,
+            "every list of a program has a u16 count"
         );
         assert!(
             f.participants_max >= 2,

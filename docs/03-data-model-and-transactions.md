@@ -330,17 +330,19 @@ Locals are numbered from 0 in the order of their binding elements (`let`, `for`,
 
 A literal's value is the storage representation of section 2.2 for a fixed-width type, so a NaN must be the canonical one and a null's bytes zero. Otherwise LowCardinality(T) is T's value; Nullable(T) is a flag byte, 0x00 for null or 0x01 followed by T's value; and String and Bytes are a u32 length and the bytes. The value must be a valid value of its type (`Type::check`).
 
-Limits of IR version 1, each tested at its value and one over:
+Limits, each tested at its value and one over:
 
 | Limit | Value |
 |---|---|
 | Encoded program | one message (section 8) |
-| Nesting depth: a body statement is at depth 1, and each statement or expression one deeper than the one containing it | 64 (`DEPTH_MAX`) |
-| Statements and expressions in one program | 10,000 (`NODES_MAX`), so every count fits its u16 |
+| Nesting depth: a body statement is at depth 1, and each statement or expression one deeper than the one containing it | the nesting depth of a program (section 8, `program_depth_max`) |
+| Statements and expressions in one program | the statements and expressions per program (section 8, `program_nodes_max`), at most 65,535, so every count fits its u16 |
 | Parameters | 255 |
 | Name | 255 bytes |
 
-Because each statement and expression takes at least one byte, nesting is limited and lists grow element by element, the decoder's memory is proportional to its input and its recursion to the depth limit. Its largest single allocation is below 2 MiB: a list of at most `NODES_MAX` elements, or a copy of part of an input of at most one message.
+The two limits from section 8 are format constants (`granite_base::constants::FORMAT`), compared between binaries by `check_format`: they decide which programs a replica accepts, so changing either value is a format change.
+
+Because each statement and expression takes at least one byte, nesting is limited and lists grow element by element, the decoder's memory is proportional to its input and its recursion to the depth limit. Its largest single allocation is below 2 MiB: a list of at most `program_nodes_max` elements, or a copy of part of an input of at most one message.
 
 Errors (`granite_txn::Error`), whose numbers are part of the protocol:
 
@@ -349,8 +351,8 @@ Errors (`granite_txn::Error`), whose numbers are part of the protocol:
 | 1 | `Malformed` | Truncated, trailing bytes, a tag out of range, invalid UTF-8 in a name, an invalid type; or, when encoding, a name over 255 bytes or more than 255 parameters. |
 | 2 | `UnsupportedVersion` | An IR version this binary does not read, such as a newer one. |
 | 3 | `UnknownOpcode` | A statement or expression opcode not in the tables above. |
-| 4 | `TooDeep` | Nesting deeper than the depth limit. |
-| 5 | `TooManyNodes` | More statements and expressions than the node limit. |
+| 4 | `TooDeep` | Nesting deeper than `program_depth_max`. |
+| 5 | `TooManyNodes` | More statements and expressions than `program_nodes_max`. |
 | 6 | `TooLarge` | An encoding longer than one message. |
 | 7 | `InvalidLiteral` | A literal that is not a valid value of its type, or not in its canonical form. |
 
@@ -385,6 +387,8 @@ For workflows that span external systems, the schema library provides a standard
 | Primary key encoded size | 512 bytes |
 | Row encoded size | 64 KiB |
 | Reads + writes per program invocation | 256 |
+| Nesting depth of a program | 64 |
+| Statements and expressions per program | 8,000 |
 | Tables per cluster | 4096 |
 | Programs per cluster | 4096 |
 

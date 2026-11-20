@@ -3,7 +3,7 @@
 //! encoding, and bytes the decoder accepts are the encoding of the tree it
 //! returns.
 
-use crate::{BinOp, DEPTH_MAX, Error, Expr, IR_VERSION, NODES_MAX, Param, Program, Scan, Stmt};
+use crate::{BinOp, Error, Expr, IR_VERSION, Param, Program, Scan, Stmt};
 use granite_base::constants::FORMAT;
 use granite_schema::{decode_type, encode_type};
 use granite_types::storage::{decode_fixed, encode_fixed};
@@ -31,11 +31,11 @@ const BINARY: u8 = 12;
 
 /// Counts one more node at `depth`, failing past the limits.
 fn enter(nodes: &mut u32, depth: u32) -> Result<(), Error> {
-    if depth > DEPTH_MAX {
+    if u64::from(depth) > FORMAT.program_depth_max {
         return Err(Error::TooDeep);
     }
     *nodes += 1;
-    if *nodes > u32::from(NODES_MAX) {
+    if u64::from(*nodes) > FORMAT.program_nodes_max {
         return Err(Error::TooManyNodes);
     }
     Ok(())
@@ -109,7 +109,7 @@ impl Writer {
         Ok(())
     }
 
-    /// A list longer than u16 has more than NODES_MAX nodes.
+    /// A list longer than u16 has more than `FORMAT.program_nodes_max` nodes.
     fn count(&mut self, n: usize) -> Result<(), Error> {
         let n = u16::try_from(n).map_err(|_| Error::TooManyNodes)?;
         self.out.extend(n.to_le_bytes());

@@ -1,0 +1,3 @@
+---- MODULE CheckLocks ----
+EXTENDS Scenario
+====

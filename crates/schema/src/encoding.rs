@@ -82,7 +82,7 @@ fn columns(w: &mut Vec<u8>, columns: &[Column]) {
     count(w, columns.len());
     for c in columns {
         name(w, &c.name);
-        ty(w, &c.ty);
+        encode_type(w, &c.ty);
     }
 }
 
@@ -123,7 +123,8 @@ fn table(w: &mut Vec<u8>, t: &Table) {
     w.extend(ms.map(u64::to_le_bytes).into_iter().flatten());
 }
 
-fn ty(w: &mut Vec<u8>, t: &Type) {
+/// Appends the encoding of a type (document 03 section 1.2). The type is not validated.
+pub fn encode_type(w: &mut Vec<u8>, t: &Type) {
     let precision = |p: &TimePrecision| match p {
         TimePrecision::Seconds => 0,
         TimePrecision::Millis => 1,
@@ -171,13 +172,21 @@ fn ty(w: &mut Vec<u8>, t: &Type) {
         }
         Type::Nullable(inner) => {
             w.push(26);
-            ty(w, inner);
+            encode_type(w, inner);
         }
         Type::LowCardinality(inner) => {
             w.push(27);
-            ty(w, inner);
+            encode_type(w, inner);
         }
     }
+}
+
+/// Decodes one type from the front of `bytes` (document 03 section 1.2) and
+/// returns it with the number of bytes it took. The type is not validated.
+pub fn decode_type(bytes: &[u8]) -> Result<(Type, usize), Error> {
+    let mut r = Reader { bytes, pos: 0 };
+    let t = r.ty(0)?;
+    Ok((t, r.pos))
 }
 
 struct Reader<'a> {

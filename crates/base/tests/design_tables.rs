@@ -285,6 +285,20 @@ fn table_cells() -> Vec<Cell> {
             F.program_accesses_max.to_string(),
         ),
         (
+            &["program_depth_max"],
+            D03,
+            "Nesting depth of a program",
+            1,
+            F.program_depth_max.to_string(),
+        ),
+        (
+            &["program_nodes_max"],
+            D03,
+            "Statements and expressions per program",
+            1,
+            grouped(F.program_nodes_max),
+        ),
+        (
             &["tables_max"],
             D03,
             "Tables per cluster",

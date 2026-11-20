@@ -1,0 +1,3 @@
+---- MODULE CheckStrict ----
+EXTENDS Scenario
+====

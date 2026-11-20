@@ -13,7 +13,8 @@
 (* quorum; both are detected (checksum, redundant header) and the slot    *)
 (* becomes faulty. The header (op and view) of a faulty slot stays known, *)
 (* as the redundant header and the hash chain give it, except at the head *)
-(* after a restart, which makes the head uncertain.                       *)
+(* after a restart beyond the headers the superblock holds, which makes   *)
+(* the head uncertain.                                                    *)
 (*                                                                         *)
 (* A prepare is identified by (op, view): one primary per view assigns    *)
 (* each op once, so the view a prepare was created in stands for its      *)
@@ -47,6 +48,7 @@ VARIABLES
     status,     \* volatile: normal, view_change, recovering, recovering_head
     view,       \* superblock
     logView,    \* superblock
+    vhead,      \* superblock: headers of the log installed with logView
     log,        \* WAL: sequence of [v, s], s in ok, pending, faulty, torn
     svc,        \* start_view_change votes [v, from]
     dvc,        \* do_view_change [v, from, lv, log (headers)]
@@ -58,7 +60,7 @@ VARIABLES
     crashes,
     corruptions
 
-vars == <<status, view, logView, log, svc, dvc, sv, prep, nack, acks, committed,
+vars == <<status, view, logView, vhead, log, svc, dvc, sv, prep, nack, acks, committed,
           crashes, corruptions>>
 
 Headers(l) == [i \in 1 .. Len(l) |-> l[i].v]
@@ -76,6 +78,11 @@ NacksPrepare(l, i, e) ==
     IF i > Len(l) THEN TRUE \* no prepare there, and the head is certain
     ELSE l[i].s \notin Unreadable /\ (l[i].v # e \/ l[i].s = "pending")
 
+\* Installing a log for a view writes log_view to the superblock together with the
+\* headers of that log (document 02 section 4), so a restart never reports a
+\* log_view with a shorter log than the one it installed.
+SuperblockHeaders(hs) == hs
+
 \* A backup may acknowledge a slot once its write is durable (invariant 6).
 AckReady(slot) == slot.s = "ok"
 
@@ -83,6 +90,7 @@ Init ==
     /\ status = [r \in R |-> "normal"]
     /\ view = [r \in R |-> 0]
     /\ logView = [r \in R |-> 0]
+    /\ vhead = [r \in R |-> <<>>]
     /\ log = [r \in R |-> <<>>]
     /\ svc = {} /\ dvc = {} /\ sv = {} /\ prep = {} /\ nack = {}
     /\ acks = {} /\ committed = {}
@@ -99,7 +107,7 @@ ClientRequest(p) ==
     /\ prep' = prep \cup {[v |-> view[p], op |-> Len(log[p]) + 1,
                            parent |-> IF log[p] = <<>> THEN 0
                                       ELSE log[p][Len(log[p])].v]}
-    /\ UNCHANGED <<status, view, logView, dvc, crashes, corruptions>>
+    /\ UNCHANGED <<status, view, logView, vhead, dvc, crashes, corruptions>>
 
 \* A backup takes a prepare of its view that extends its hash chain.
 ReceivePrepare(r, m) ==
@@ -107,13 +115,13 @@ ReceivePrepare(r, m) ==
     /\ m.op = Len(log[r]) + 1
     /\ IF m.op = 1 THEN TRUE ELSE log[r][m.op - 1].v = m.parent
     /\ log' = [log EXCEPT ![r] = Append(@, [v |-> m.v, s |-> "pending"])]
-    /\ UNCHANGED <<status, view, logView, dvc, prep, crashes, corruptions>>
+    /\ UNCHANGED <<status, view, logView, vhead, dvc, prep, crashes, corruptions>>
 
 \* A WAL write completes.
 WriteDurable(r, i) ==
     /\ log[r][i].s = "pending"
     /\ log' = [log EXCEPT ![r][i].s = "ok"]
-    /\ UNCHANGED <<status, view, logView, dvc, prep, crashes, corruptions>>
+    /\ UNCHANGED <<status, view, logView, vhead, dvc, prep, crashes, corruptions>>
 
 ---------------------------------------------------------------------------
 \* View change (sections 0 and 4)
@@ -127,7 +135,7 @@ MayVote(st, vw, r) ==
 Vote(r) ==
     /\ MayVote(status, view, r)
     /\ svc' = svc \cup {[v |-> view[r] + 1, from |-> r]}
-    /\ UNCHANGED <<status, view, logView, log, dvc, prep, nack, sv, acks,
+    /\ UNCHANGED <<status, view, logView, vhead, log, dvc, prep, nack, sv, acks,
                    committed, crashes, corruptions>>
 
 \* On a quorum of votes, or a do_view_change of the view: make the view durable,
@@ -140,7 +148,7 @@ JoinView(r, v) ==
     /\ status' = [status EXCEPT ![r] = "view_change"]
     /\ view' = [view EXCEPT ![r] = v]
     /\ dvc' = dvc \cup {[v |-> v, from |-> r, lv |-> logView[r], log |-> Headers(log[r])]}
-    /\ UNCHANGED <<logView, log, prep, crashes, corruptions>>
+    /\ UNCHANGED <<logView, vhead, log, prep, crashes, corruptions>>
 
 \* The do_view_change with the highest (log_view, op).
 Best(Q) == CHOOSE d \in Q : \A d2 \in Q : \/ d2.lv < d.lv
@@ -156,6 +164,7 @@ InstallLog(p) ==
           /\ LET new == Merge(log[p], Best(Q).log)
              IN log' = [log EXCEPT ![p] = new]
     /\ logView' = [logView EXCEPT ![p] = view[p]]
+    /\ vhead' = [vhead EXCEPT ![p] = SuperblockHeaders(Headers(log'[p]))]
     /\ UNCHANGED <<status, view, dvc, prep, crashes, corruptions>>
 
 \* With a nack quorum for an unreadable op, drop it and every later op.
@@ -165,6 +174,7 @@ Truncate(p, i) ==
     /\ Cardinality({n.from : n \in {n \in nack : n.v = view[p] /\ n.op = i
                                                /\ n.e = log[p][i].v}}) >= NackQuorum
     /\ log' = [log EXCEPT ![p] = SubSeq(@, 1, i - 1)]
+    /\ vhead' = [vhead EXCEPT ![p] = SuperblockHeaders(Headers(log'[p]))]
     /\ UNCHANGED <<status, view, logView, dvc, prep, crashes, corruptions>>
 
 \* With every kept prepare durable, the new primary starts the view.
@@ -172,7 +182,7 @@ StartView(p) ==
     /\ p = Primary(view[p]) /\ status[p] = "view_change" /\ logView[p] = view[p]
     /\ \A i \in 1 .. Len(log[p]) : log[p][i].s = "ok"
     /\ status' = [status EXCEPT ![p] = "normal"]
-    /\ UNCHANGED <<view, logView, log, dvc, prep, crashes, corruptions>>
+    /\ UNCHANGED <<view, logView, vhead, log, dvc, prep, crashes, corruptions>>
 
 \* Adopt the new view's log. A replica with an uncertain head takes only a
 \* start_view that covers its whole log.
@@ -185,6 +195,7 @@ ReceiveStartView(r, m) ==
     /\ status' = [status EXCEPT ![r] = "normal"]
     /\ view' = [view EXCEPT ![r] = m.v]
     /\ logView' = [logView EXCEPT ![r] = m.v]
+    /\ vhead' = [vhead EXCEPT ![r] = SuperblockHeaders(m.log)]
     /\ log' = [log EXCEPT ![r] = Merge(@, m.log)]
     /\ UNCHANGED <<dvc, prep, crashes, corruptions>>
 
@@ -198,10 +209,11 @@ Repair(r, s, i) ==
     /\ log[r][i].s \in Unreadable
     /\ i <= Len(log[s]) /\ log[s][i].v = log[r][i].v /\ log[s][i].s = "ok"
     /\ log' = [log EXCEPT ![r][i].s = "ok"]
-    /\ UNCHANGED <<status, view, logView, dvc, prep, crashes, corruptions>>
+    /\ UNCHANGED <<status, view, logView, vhead, dvc, prep, crashes, corruptions>>
 
 \* Crash and restart. Writes in flight are lost; with torn, the first one after the
-\* last durable slot is torn. An unreadable head makes the head uncertain.
+\* last durable slot is torn. A slot named by the superblock headers but lost from
+\* the WAL is torn; an unreadable head beyond them makes the head uncertain.
 Crash(r, torn) ==
     /\ crashes < MaxCrash
     /\ LET l == log[r]
@@ -211,15 +223,20 @@ Crash(r, torn) ==
                       IF l[i].s = "pending" THEN [l[i] EXCEPT !.s = "torn"] ELSE l[i]]
            wal == IF torn /\ last < Len(l)
                   THEN Append(kept, [l[last + 1] EXCEPT !.s = "torn"]) ELSE kept
-       IN /\ log' = [log EXCEPT ![r] = wal]
+           hs == vhead[r]
+           \* The superblock still names the installed log's prepares the WAL lost.
+           new == [i \in 1 .. IF Len(wal) > Len(hs) THEN Len(wal) ELSE Len(hs) |->
+                     IF i <= Len(wal) THEN wal[i] ELSE [v |-> hs[i], s |-> "torn"]]
+       IN /\ log' = [log EXCEPT ![r] = new]
           /\ status' = [status EXCEPT ![r] =
-                IF wal # <<>> /\ wal[Len(wal)].s \in Unreadable THEN "recovering_head"
+                \* Uncertain head: unreadable, and beyond the headers the superblock holds.
+                IF Len(new) > Len(hs) /\ new[Len(new)].s \in Unreadable THEN "recovering_head"
                 ELSE IF logView[r] < view[r] THEN "view_change"
                 \* A restarted primary lost its pipeline and gives up its view.
                 ELSE IF r = Primary(view[r]) THEN "recovering"
                 ELSE "normal"]
     /\ crashes' = crashes + 1
-    /\ UNCHANGED <<view, logView, dvc, prep, corruptions>>
+    /\ UNCHANGED <<view, logView, vhead, dvc, prep, corruptions>>
 
 \* A bit flip or a lost write on a durable slot, on fewer than Qr replicas.
 Corrupt(r, i) ==
@@ -229,7 +246,7 @@ Corrupt(r, i) ==
                               /\ log[s][i].s \in Unreadable}) + 1 < Qr
     /\ log' = [log EXCEPT ![r][i].s = "faulty"]
     /\ corruptions' = corruptions + 1
-    /\ UNCHANGED <<status, view, logView, dvc, prep, crashes>>
+    /\ UNCHANGED <<status, view, logView, vhead, dvc, prep, crashes>>
 
 ---------------------------------------------------------------------------
 Slots(r) == 1 .. Len(log[r])
@@ -337,6 +354,9 @@ TypeOK ==
           /\ logView[r] <= view[r]
           /\ Len(log[r]) <= MaxOps
           /\ \A i \in Slots(r) : log[r][i] \in Slot
+          \* The WAL keeps every slot the superblock headers name.
+          /\ Len(vhead[r]) <= Len(log[r])
+          /\ \A i \in 1 .. Len(vhead[r]) : log[r][i].v = vhead[r][i]
 
 \* Invariant 1: at most one prepare is committed at an op number.
 OneCommitPerOp == \A a, b \in committed : a.op = b.op => a.v = b.v

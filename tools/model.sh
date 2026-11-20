@@ -37,7 +37,7 @@ run() {
     # TLC 2.19 ignores -DTLA-Library, so a defect module finds the modules it extends
     # by being checked next to copies of them.
     cp "$dir"/*.tla "${cfg%.cfg}.tla" "$cfg" "$meta/spec/"
-    bounds=$(sed -n 's/^ *\([A-Za-z][A-Za-z0-9_]*\) *= *\([^ ]*\).*/\1=\2/p' "$cfg" | paste -sd ' ' -)
+    bounds=$(sed -n 's/^ *\([A-Za-z][A-Za-z0-9_]*\) *= *\(.*[^ ]\) *$/\1 = \2/p' "$cfg" | paste -sd ';' - | sed 's/;/; /g')
     start=$SECONDS
     code=0
     java -XX:+UseParallelGC -cp "$jar" tlc2.TLC -workers auto -metadir "$meta/states" \

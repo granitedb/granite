@@ -198,14 +198,14 @@ fn names_and_parameters_are_limited() {
         params: vec![param(name); params],
         body: vec![],
     };
-    let (long, longer) = ("x".repeat(255), "x".repeat(256));
-    let p = at(&long, 255);
+    // Names and the parameter count have a u8 length.
+    let max = usize::from(u8::MAX);
+    let p = at(&"x".repeat(max), max);
     let bytes = p.encode().unwrap();
     assert_eq!(Program::decode(&bytes), Ok(p));
-    assert_eq!(at(&longer, 0).encode(), Err(Error::Malformed));
-    assert_eq!(at("", 256).encode(), Err(Error::Malformed));
-    // A name length byte cannot say 256, so the decoder reads the 256th byte
-    // of a name as the next field; one more parameter cannot be counted.
+    assert_eq!(at(&"x".repeat(max + 1), 0).encode(), Err(Error::Malformed));
+    assert_eq!(at("", max + 1).encode(), Err(Error::Malformed));
+    // A u8 length cannot say one more, so the decoder cannot be given one more.
 }
 
 #[test]

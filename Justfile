@@ -66,6 +66,10 @@ doc:
 roadmap-plan:
     python3 tools/roadmap_issues.py plan
 
+# Model-check one protocol model under models/ with TLC, for example `just model vsr` (models/README.md).
+model name:
+    tools/model.sh {{ name }}
+
 # Create and start the Linux VM for io_uring and direct I/O work (docs/linux-vm.md).
 vm-up:
     tools/vm/vm.sh up

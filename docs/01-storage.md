@@ -50,7 +50,7 @@ The checkpoint interval is a multiple of the compaction interval, so a checkpoin
 
 ### Superblock
 
-Holds: cluster id, group id, replica index, format version, VSR state (view, log view, commit op, checkpoint op), checkpoint references (manifest root block, free-set blocks, client-session table block), each with address and checksum. Written as 4 copies in sequence, each with its own checksum and a sequence number. On open, the highest sequence number with a valid quorum of copies wins. A superblock update is the atomic commit point of a checkpoint.
+Holds: cluster id, group id, replica index, format version, VSR state (view, log view, the headers of the log installed with log view (document 02 section 4), commit op, checkpoint op), checkpoint references (manifest root block, free-set blocks, client-session table block), each with address and checksum. Written as 4 copies in sequence, each with its own checksum and a sequence number. On open, the highest sequence number with a valid quorum of copies wins. A superblock update is the atomic commit point of a checkpoint.
 
 ### WAL
 

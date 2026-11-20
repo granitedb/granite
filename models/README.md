@@ -23,3 +23,4 @@ just model vsr
 |---|---|---|
 | [selftest](selftest/Counter.tla) | None: a counter with one passing run and one defect for each kind of counterexample, so the runner's verdicts are checked on every run of the nightly job | the runner |
 | [vsr](vsr/README.md) | Normal operation and view change with storage faults (document 02) | T2.1.2 |
+| [xshard](xshard/README.md) | Cross-shard transactions: independent and coordinated, timestamp-order execution with the bypass, conflict vote, view changes (document 04 section 4) | T5.1.2 |

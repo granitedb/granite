@@ -6,12 +6,17 @@
 //! only what the IR can express: there is no element for time other than
 //! [`Expr::CommitTs`], for randomness, external calls, dynamic table names,
 //! unbounded loops or recursion. Whether a tree is a valid program (types,
-//! bounds, names) is checked by the validator, not here.
+//! bounds, names) is checked by [`Program::validate`] against a catalog
+//! (section 5.2), which also reports each access's key provenance and
+//! partition-key expressions.
 
 use granite_types::{Type, Value};
 use std::ops::Bound;
 
 mod encoding;
+mod validate;
+
+pub use validate::{Access, AccessKind, Guard, Invalid, Local, Provenance, Report};
 
 /// The version of the IR and its encoding, its first two bytes.
 pub const IR_VERSION: u16 = 1;
@@ -138,8 +143,9 @@ pub enum BinOp {
     Or,
 }
 
-/// Why bytes are not an IR encoding, or a tree cannot be encoded. The
-/// numbers are part of the protocol.
+/// Why bytes are not an IR encoding, a tree cannot be encoded (1 to 7), or
+/// a tree is not a valid program (from 8, the validator). The numbers are
+/// part of the protocol; document 03 sections 5.1 and 5.2 give the rules.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Error {
@@ -162,4 +168,37 @@ pub enum Error {
     /// A literal whose value is not a value of its type, or not in its
     /// canonical form.
     InvalidLiteral = 7,
+    /// A table the catalog does not have.
+    UnknownTable = 8,
+    /// A column index past the table's columns.
+    UnknownColumn = 9,
+    /// A parameter index past the program's parameters.
+    UnknownParam = 10,
+    /// A local that is not bound at that place.
+    UnknownLocal = 11,
+    /// A value of a type where another type is needed, and no cast exists
+    /// between them; or an operator applied to a type it does not take.
+    TypeMismatch = 12,
+    /// Two different numeric types meet without an explicit cast.
+    ImplicitCast = 13,
+    /// A nullable value, or a row that may be null, where a value is needed:
+    /// in arithmetic, a comparison, a condition, a key or a field access.
+    NullableOperand = 14,
+    /// A key with other than the table's key column count, a row with other
+    /// than its column count, or a scan prefix or bound past the key.
+    WrongArity = 15,
+    /// An upsert, update or delete of an immutable table.
+    ImmutableTable = 16,
+    /// An update that sets a primary key column.
+    KeyColumnUpdated = 17,
+    /// An update that sets one column twice.
+    ColumnSetTwice = 18,
+    /// A scan whose prefix does not give the whole partition key.
+    ScanAcrossPartitions = 19,
+    /// More reads and writes on some path than `FORMAT.program_accesses_max`.
+    TooManyAccesses = 20,
+    /// A program that returns on some paths and not on others.
+    MissingReturn = 21,
+    /// A statement after one that may return.
+    CodeAfterReturn = 22,
 }

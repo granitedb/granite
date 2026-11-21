@@ -57,6 +57,7 @@ version = "0.0.0"
 name = "granite-fuzz"
 version = "0.0.0"
 dependencies = [
+ "granite-base",
  "granite-schema",
  "granite-schemac",
  "granite-txn",

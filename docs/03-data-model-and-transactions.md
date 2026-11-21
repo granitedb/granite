@@ -258,10 +258,10 @@ IR elements:
 
 Not in the IR: unbounded loops, recursion, time, randomness, external calls, dynamic table names.
 
-Static checks at registration:
+Static checks at registration (section 5.2):
 - type checking with no implicit casts,
 - maximum number of reads and writes, computed from the bounds,
-- **key provenance:** for each read and write, whether its key is derived only from parameters ("static keys") or from earlier reads ("dependent keys"). Programs with only static keys can run cross-shard. Programs with dependent keys are single-shard only.
+- **key provenance:** for each read and write, whether its key is derived only from parameters ("static keys") or from earlier reads ("dependent keys"). An access that happens or not depending on a read (inside an `if` or `match` on a read, or inside a `for`) is dependent too, since which keys it touches depends on the read. Programs with only static keys can run cross-shard. Programs with dependent keys are single-shard only.
 - **shard set:** the partition-key expressions, so the client and server can compute which tablets an invocation touches from the parameters alone.
 
 Execution model inside a shard:
@@ -344,7 +344,7 @@ The two limits from section 8 are format constants (`granite_base::constants::FO
 
 Because each statement and expression takes at least one byte, nesting is limited and lists grow element by element, the decoder's memory is proportional to its input and its recursion to the depth limit. Its largest single allocation is below 2 MiB: a list of at most `program_nodes_max` elements, or a copy of part of an input of at most one message.
 
-Errors (`granite_txn::Error`), whose numbers are part of the protocol:
+Errors (`granite_txn::Error`), whose numbers are part of the protocol; the codes from 8 are the validator's (section 5.2):
 
 | Code | Name | Meaning |
 |---|---|---|
@@ -363,6 +363,66 @@ Example: `program t(a: u64)` with the body `require not is_null(get acc[a]) else
 02 07 08 04 03 61 63 63 01 00 01 00  01 45                 require not is_null(get "acc"[param 0]) else "E"
 08 0c 01 00 00 03 01 00 00 00 00 00 00 00                  return param 0 + (u64 1)
 ```
+
+### 5.2 Validation
+
+`Program::validate` checks a program against a valid catalog once, when it is registered or arrives inline, so that execution cannot be surprised. The first broken rule rejects the program with its code (table below) and its node: statements and expressions are numbered from 1 in the order of the encoding, and node 0 is the program as a whole. A tree that `Program::encode` rejects is rejected with that error at node 0, so the validator sees only trees within the limits of section 5.1.
+
+Types. Every expression has a type: a value type, LowCardinality hints removed (they do not change the logical type), or a row of a table, which `get` gives as possibly null and `for` and `match` give as present. There is no implicit conversion: wherever a value of type T is needed, the expression must have type T, except that a T may be given where a Nullable(T) is needed, as every value of T is one of Nullable(T).
+
+| Element | Rule | Type |
+|---|---|---|
+| literal, parameter, local | the parameter or local exists, and the local is in scope | its type |
+| `commit_ts()` | | u64, like the hidden `_ts` column (document 01 section 4) |
+| field | of a present row; the column exists | the column's type |
+| `get t[k]` | t exists; one value per primary key column, each of the column's type | a row of t, or null |
+| `-a` | an integer or decimal | a's |
+| `a + b`, `-`, `*`, `/`, `%` | a is an integer or decimal, b of a's type | a's |
+| `a = b`, `!=`, `<`, `<=`, `>`, `>=` | a is neither a float, nullable nor a row; b of a's type | bool |
+| `a and b`, `a or b`, `not a`, conditions of `if` and `require` | bool | bool |
+| `is_null(a)` | a nullable value or a row that may be null | bool |
+| `unwrap_or(a, b)` | a nullable; b of the type a has when present | that type |
+| `match v, n, p` | v nullable; the local is v present, in scope in p only; n and p of one type, or T and Nullable(T) | that type, Nullable(T) for T and Nullable(T) |
+| cast | a non-null integer, decimal or float to an integer, decimal or float type | the target |
+| `insert`, `upsert` | one value per column, each of the column's type | |
+| `update t[k]` | the key as for `get`; each set column exists, is not a key column, is set once, and gets a value of its type | |
+| `delete t[k]` | the key as for `get` | |
+| `for` over a scan | the prefix gives at least the partition key and at most the primary key, each of its column's type; a bound has the type of the next key column, and needs one | |
+| `return` | a value, not a row; every `return` of one type, or T and Nullable(T) | |
+
+Nulls are never operands (section 9): a nullable value or a row that may be null where a value is needed is `NullableOperand`, and the program must test it with `is_null`, `unwrap_or` or `match`. Comparison orders integers and decimals by value and every other type by its key encoding (section 2.1); floats are not compared. `upsert`, `update` and `delete` need a versioned table (section 4).
+
+Evaluation. Every operand of an expression is evaluated, left to right: `and` and `or` do not short-circuit and `unwrap_or` evaluates its default. Only `if` and `match` choose: `if` runs one of its blocks, `match` evaluates one of its two branches. So an access inside an expression happens whenever the expression is evaluated, unless it is in a branch of a `match`.
+
+Scopes and returns. A `let` local is in scope from the statement after the `let` to the end of its block, a `for` local in the body, a `match` local in the third operand. A statement may return when it is a `return`, an `if` with a block that may return, or a `for` whose body may return; it must be the last of its block (`CodeAfterReturn`), so no statement runs after a return on any path. The program then returns on every path, or on none (`MissingReturn`); a `for` returns on no path when it finds no rows.
+
+Bounds. A `get` reads one row, a scan up to its limit, an `update` reads and writes one row, and `insert`, `upsert` and `delete` write one. Statements in sequence add up, an `if` and a `match` take their costlier branch, and a `for` counts its scan plus its body times the limit. The validator reports the most reads and the most writes of one invocation, and rejects a program in which some path reads and writes more than the limit of section 8 (`program_accesses_max`, 256) with `TooManyAccesses`. The bound is exact for straight-line programs and an upper bound otherwise.
+
+Key provenance. An expression depends on a read when it contains a `get`, `commit_ts()` (unknown until the transaction is ordered) or a local bound to such an expression, to a scanned row, or by a `match` on such a value. An access is **static** when its key does not depend on a read and nothing on its path does: no condition of an enclosing `if`, no value of an enclosing `match`, and no enclosing `for`. Otherwise it is **dependent**. The key is the primary key values of `get`, `update`, `delete` and the row of `insert` and `upsert`, and the prefix and bounds of a scan. A `require` or a run-time error before an access does not make it dependent: it aborts the whole invocation.
+
+Shard set. For each access the validator reports its kind, its table, its provenance, its partition-key expressions (the first values of its key, one per partition key column), and its guard: the chain of conditions under which it runs, each an `if` condition or `is_null` of a `match` value with the value it must have, evaluated from the outermost. These are the program's own expressions, which the report borrows, so validation copies no part of the tree. Locals in them are resolved through the report: a `let` local is its expression, a `match` local the present value of its expression. For a program whose accesses are all static, evaluating from the parameters alone each access whose guards hold gives exactly the partitions an invocation that commits touches; an invocation that aborts touches a subset.
+
+Validation takes time linear in the size of the program: programs of `program_nodes_max` nodes validate in under 0.2 ms in a release build (test `the_largest_valid_programs_validate_in_under_10_ms`).
+
+| Code | Name | Rule |
+|---|---|---|
+| 8 | `UnknownTable` | Every table the program names is in the catalog. |
+| 9 | `UnknownColumn` | Every column index, of a field or of an `update`, names a column of the table. |
+| 10 | `UnknownParam` | Every parameter index names a parameter. |
+| 11 | `UnknownLocal` | Every local is in scope where it is used. |
+| 12 | `TypeMismatch` | Every value has the type its place needs (table above), where the two types have no cast between them, and every operator gets a type it takes. |
+| 13 | `ImplicitCast` | Two different numeric types never meet without an explicit cast: `u64 + u32`, or a Decimal(18, 2) where a Decimal(18, 4) is needed. |
+| 14 | `NullableOperand` | No nullable value, and no row that may be null, is used where a value is needed: in arithmetic, a comparison, a condition, a key, a non-null column or a field access. |
+| 15 | `WrongArity` | A key has one value per primary key column, a row one per column, a scan prefix at most the primary key, and a bound needs a key column after the prefix. |
+| 16 | `ImmutableTable` | `upsert`, `update` and `delete` write only versioned tables. |
+| 17 | `KeyColumnUpdated` | An `update` sets no primary key column. |
+| 18 | `ColumnSetTwice` | An `update` sets each column at most once. |
+| 19 | `ScanAcrossPartitions` | A scan's prefix gives the whole partition key, so a scan stays in one partition (section 4). |
+| 20 | `TooManyAccesses` | No path reads and writes more than `program_accesses_max` rows. |
+| 21 | `MissingReturn` | A program returns on every path or on none. |
+| 22 | `CodeAfterReturn` | No statement follows one that may return. |
+| 23 | `ParamType` | An invocation's parameter values match the declared types: one per parameter, each a valid value of its type (`Type::check`), so null only for a Nullable parameter and a decimal within its precision. Not a rule of the program: `Program::check_params` checks each parameter set, and the executor runs it before the program. |
+| - | write to a derived table | Reserved: rejected once derived tables exist (T3.4.1); the catalog has none yet. |
 
 ## 6. Two-phase business patterns
 

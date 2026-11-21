@@ -579,12 +579,11 @@ impl<'a> Exec<'a> {
         params: &[Value],
         commit_ts: u64,
     ) -> Self {
-        assert_eq!(params.len(), program.params.len());
+        program
+            .check_params(params)
+            .expect("parameters of the declared types");
         let params = (program.params.iter().zip(params))
-            .map(|(p, v)| {
-                p.ty.check(v).expect("parameters of the declared types");
-                V::Val(base(&p.ty), v.clone())
-            })
+            .map(|(p, v)| V::Val(base(&p.ty), v.clone()))
             .collect();
         let numbers = number(program);
         Exec {

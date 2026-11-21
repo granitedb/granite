@@ -3,10 +3,10 @@
 //! program is well typed, its reads and writes per invocation are bounded,
 //! and each access's key provenance and partition-key expressions are known.
 
-use crate::{BinOp, Error, Expr, Program, Stmt};
+use crate::{BinOp, Error, Expr, Param, Program, Stmt};
 use granite_base::constants::FORMAT;
 use granite_schema::{Catalog, Kind, Table};
-use granite_types::Type;
+use granite_types::{Type, Value};
 use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Bound;
 
@@ -322,6 +322,21 @@ impl Program {
         assert!(cost.total <= FORMAT.program_accesses_max);
         assert!(report.reads + report.writes >= cost.total);
         Ok(report)
+    }
+}
+
+impl Program {
+    /// Checks one invocation's parameter values against the declared
+    /// types: one value per parameter, each a value of its type
+    /// (`Type::check`: null only for Nullable, decimals within their
+    /// precision). The executor runs it before the program.
+    pub fn check_params(&self, values: &[Value]) -> Result<(), Error> {
+        let fits = |(p, v): (&Param, &Value)| p.ty.check(v).is_ok();
+        if values.len() == self.params.len() && self.params.iter().zip(values).all(fits) {
+            Ok(())
+        } else {
+            Err(Error::ParamType)
+        }
     }
 }
 

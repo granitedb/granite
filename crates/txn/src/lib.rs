@@ -201,4 +201,7 @@ pub enum Error {
     MissingReturn = 21,
     /// A statement after one that may return.
     CodeAfterReturn = 22,
+    /// An invocation's parameter values are not of the declared types
+    /// ([`Program::check_params`]).
+    ParamType = 23,
 }

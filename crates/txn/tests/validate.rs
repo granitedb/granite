@@ -544,3 +544,111 @@ fn the_largest_valid_programs_validate_in_under_10_ms() {
         assert!(best < std::time::Duration::from_millis(10), "{best:?}");
     }
 }
+
+#[test]
+fn parameter_values_of_other_types() {
+    let p = program(&[Type::U64, null(Type::I64), DEC], vec![]);
+    let ok = [Value::U64(1), Value::Null, Value::Decimal64(-5)];
+    assert_eq!(p.check_params(&ok), Ok(()));
+    assert_eq!(
+        p.check_params(&[Value::U64(1), Value::I64(2), Value::Decimal64(0)]),
+        Ok(())
+    );
+    let bad = |i: usize, v: Value| {
+        let mut values = ok.to_vec();
+        values[i] = v;
+        assert_eq!(p.check_params(&values), Err(Error::ParamType), "{values:?}");
+    };
+    bad(0, Value::U32(1)); // another type
+    bad(0, Value::Null); // null for a non-null parameter
+    bad(1, Value::U64(2)); // another inner type
+    bad(2, Value::Decimal128(0)); // another decimal width
+    bad(2, Value::Decimal64(10i64.pow(18))); // more digits than the precision
+    assert_eq!(p.check_params(&ok[..2]), Err(Error::ParamType));
+    assert_eq!(
+        p.check_params(&[ok.to_vec(), vec![Value::U64(0)]].concat()),
+        Err(Error::ParamType)
+    );
+}
+
+/// "Unbounded loop" has no tree to reject. The IR's only loop is `for`,
+/// whose bound is the scan's `limit`: a u16 written in the encoding, not an
+/// expression, so no parameter or read can raise it. No other statement or
+/// expression repeats or calls anything: the matches below list every
+/// element without a wildcard, so a new one fails to compile until it is
+/// classified, and `ir.rs` `every_opcode_is_a_listed_element_or_unknown`
+/// shows that every opcode decodes to one of these elements or is rejected.
+#[test]
+fn the_only_loop_is_bounded_by_a_constant_of_the_encoding() {
+    fn loops(s: &Stmt) -> bool {
+        match s {
+            Stmt::For { .. } => true,
+            Stmt::Let(_)
+            | Stmt::If { .. }
+            | Stmt::Require { .. }
+            | Stmt::Insert { .. }
+            | Stmt::Upsert { .. }
+            | Stmt::Update { .. }
+            | Stmt::Delete { .. }
+            | Stmt::Return(_) => false,
+        }
+    }
+    fn loops_or_calls(e: &Expr) -> bool {
+        match e {
+            Expr::Literal(_)
+            | Expr::Param(_)
+            | Expr::Local(_)
+            | Expr::Field(..)
+            | Expr::Get { .. }
+            | Expr::CommitTs
+            | Expr::Neg(_)
+            | Expr::Not(_)
+            | Expr::IsNull(_)
+            | Expr::UnwrapOr(..)
+            | Expr::Match { .. }
+            | Expr::Cast(..)
+            | Expr::Binary(..) => false,
+        }
+    }
+    assert!(loops(&for_(
+        "entry",
+        vec![],
+        Bound::Unbounded,
+        Bound::Unbounded,
+        0,
+        vec![]
+    )));
+    assert!(!loops_or_calls(&Expr::CommitTs));
+    let max = FORMAT.program_accesses_max;
+    let m = u16::try_from(max).unwrap();
+    for limit in [0, 1, m - 1, m, m + 1, u16::MAX] {
+        let p = program(
+            &[Type::U64],
+            vec![for_(
+                "entry",
+                vec![p(0)],
+                Bound::Unbounded,
+                Bound::Unbounded,
+                limit,
+                vec![],
+            )],
+        );
+        // The limit is the u16 before the body's statement count, which is
+        // the last field of the encoding.
+        let bytes = p.encode().unwrap();
+        let n = bytes.len();
+        assert_eq!(bytes[n - 4..n - 2], limit.to_le_bytes());
+        assert_eq!(bytes[n - 2..], [0, 0]);
+        // The validator counts it: one read per row the scan may return.
+        let reads = check(&p).map(|r| r.reads).map_err(|e| e.error);
+        let want = u64::from(limit);
+        assert_eq!(
+            reads,
+            if want <= max {
+                Ok(want)
+            } else {
+                Err(Error::TooManyAccesses)
+            }
+        );
+    }
+}

@@ -421,6 +421,7 @@ Validation takes time linear in the size of the program: programs of `program_no
 | 20 | `TooManyAccesses` | No path reads and writes more than `program_accesses_max` rows. |
 | 21 | `MissingReturn` | A program returns on every path or on none. |
 | 22 | `CodeAfterReturn` | No statement follows one that may return. |
+| 23 | `ParamType` | An invocation's parameter values match the declared types: one per parameter, each a valid value of its type (`Type::check`), so null only for a Nullable parameter and a decimal within its precision. Not a rule of the program: `Program::check_params` checks each parameter set, and the executor runs it before the program. |
 | - | write to a derived table | Reserved: rejected once derived tables exist (T3.4.1); the catalog has none yet. |
 
 ## 6. Two-phase business patterns

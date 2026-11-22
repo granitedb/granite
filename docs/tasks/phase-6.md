@@ -125,7 +125,7 @@ Design references: `docs/05-query-and-protocol.md` section 4 and `docs/01-storag
 - A validator: types, known tables and columns, and a static memory bound computed for every operator.
 - Rejection of any fragment without a bound, or whose bound exceeds the limit.
 
-**Not in this card.** Execution (T6.2.2, T6.2.3), joins and sorts, which run in the gateway.
+**Not in this card.** Execution (T6.2.2, T6.2.3), joins and sorts, which run in the gateway. Measuring the peak memory of executed fragments against the bound, which needs execution (T6.2.3).
 
 **Depends on.** T3.3.1 (shares the expression encoding).
 
@@ -133,7 +133,6 @@ Design references: `docs/05-query-and-protocol.md` section 4 and `docs/01-storag
 - [ ] Fuzz gate 8 on the decoder and on the validator.
 - [ ] Every operator has a documented memory-bound formula and a test that the validator computes it.
 - [ ] Unbounded fragments are rejected, each with its own code: a `TopN` without n, an aggregate without a group-table bound, a scan without a column list (tests).
-- [ ] Property: for 1,000,000 random valid fragments executed on random data, measured peak memory never exceeds the validator's bound.
 - [ ] A fragment with a join, a subquery, an unbounded sort or a write has no encoding; a test asserts no opcode decodes to one.
 - [ ] The IR is specified in document 05 with a version.
 
@@ -177,7 +176,7 @@ Design references: `docs/05-query-and-protocol.md` section 4 and `docs/01-storag
 **Gates.**
 - [ ] Results equal the reference model for 1,000,000 random fragments (model test). For partial aggregates, the comparison is made after merging the partial groups.
 - [ ] With a group table bound smaller than the number of groups, the operator flushes and the merged result is still exact (test with 100 times more groups than the bound).
-- [ ] Peak memory never exceeds the validator's bound (measured in the property test of T6.2.1).
+- [ ] Property: for 1,000,000 random valid fragments executed on random data, measured peak memory never exceeds the validator's bound (from T6.2.1).
 - [ ] Integer and decimal sums use accumulators that cannot overflow, or return a typed overflow error; they never wrap (test at the boundary).
 - [ ] Floating-point aggregates are bit-identical on Linux x86-64 and macOS ARM for the golden queries.
 - [ ] Top-N with ties is deterministic: the tie-break rule is documented and tested.

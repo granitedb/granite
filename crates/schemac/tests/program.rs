@@ -623,10 +623,10 @@ fn nesting_and_size_are_bounded() {
         ))
     );
 
-    const MIB: usize = 1 << 20;
+    let mib = FORMAT.message_size_max as usize;
     let fill = |head: &str, unit: &str| {
         let mut s = head.to_string();
-        while s.len() + unit.len() <= MIB {
+        while s.len() + unit.len() <= mib {
             s.push_str(unit);
         }
         s
@@ -634,14 +634,17 @@ fn nesting_and_size_are_bounded() {
     let shapes = [
         fill("program p(u: u64)\n  return u", " + u"),
         fill("program p(u: u64)\n  return u64 ", "0"),
-        fill("program p(u: u64)\n  return String(1048576) \"", "x"),
+        fill(
+            &format!("program p(u: u64)\n  return String({mib}) \""),
+            "x",
+        ),
         fill("program p(u: u64)\n", "  let x = u\n"),
         fill("program p(u: u64)\n  let x = u\n  if ", "x = x and "),
         fill("program p(", "a: u64, "),
         fill("program p(u: u64) -- ", "x"),
     ];
     for (i, text) in shapes.iter().enumerate() {
-        assert!(text.len() <= MIB);
+        assert!(text.len() <= mib);
         let start = std::time::Instant::now();
         let result = problem(text);
         let elapsed = start.elapsed();

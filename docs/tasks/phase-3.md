@@ -226,17 +226,17 @@ Design reference for the whole phase: `docs/03-data-model-and-transactions.md`. 
 - A report per program: read and write bounds, key provenance, shard set.
 - A formatter that prints IR back as canonical text.
 
-**Not in this card.** The `on <participant>:` blocks and classification output (T5.2.6).
+**Not in this card.** The `on <participant>:` blocks and classification output (T5.2.6). Registering and running the `transfer` example on a replicated group, which needs registration and the executor (T3.3.5).
 
 **Depends on.** T3.3.2, T1.4.5.
 
 **Gates.**
-- [ ] The `transfer` example of document 03 section 5 compiles, registers and runs against a 3-replica group in an integration test, with both the success and the `InsufficientFunds` outcome checked.
+- [ ] The `transfer` example of document 03 section 5 compiles and validates against its schema (test).
 - [ ] Round trip: compile, print, compile gives byte-identical IR (property test over random valid programs).
-- [ ] Every validator error code surfaces as a compiler error naming file, line and column (one test per code).
+- [ ] Every validator error code that program text can break (8 to 22) surfaces as a compiler error naming file, line and column (one test per code), and a test shows that code 23, `ParamType`, is checked per invocation.
 - [ ] Fuzz gate 4 on the parser: no panic and no hang on arbitrary text.
 - [ ] The compiler's report for the example programs is committed as a golden file and checked in CI.
-- [ ] The grammar is documented, and every example in the design documents that is a program compiles or is corrected.
+- [ ] The grammar is documented, and every example in the design documents that is a program compiles or is corrected, except `settle_trade`, whose `on` blocks are T5.2.6's.
 
 ## T3.3.5 Register, retire and inline programs
 
@@ -251,7 +251,7 @@ Design reference for the whole phase: `docs/03-data-model-and-transactions.md`. 
 
 **Not in this card.** Distribution through the metadata group (T4.2.2); here registration is per group.
 
-**Depends on.** T3.3.3.
+**Depends on.** T3.3.3, T3.3.4.
 
 **Gates.**
 - [ ] Register and retire take effect at the same op on every replica (convergence checker, seed gate 10,000 with all faults).
@@ -261,6 +261,7 @@ Design reference for the whole phase: `docs/03-data-model-and-transactions.md`. 
 - [ ] Registering the same id with different content is rejected; with identical content it succeeds idempotently.
 - [ ] The 4097th registration is rejected with a typed error.
 - [ ] The validated-program cache never changes results: two replicas with different cache sizes stay byte-identical.
+- [ ] The `transfer` example of document 03 section 5 compiles, registers and runs against a 3-replica group in an integration test, with both the success and the `InsufficientFunds` outcome checked (from T3.3.4).
 
 ## T3.4.1 Derived table definition and maintenance in the same op, with overflow-free accumulators
 

@@ -185,6 +185,7 @@ Design reference: `docs/04-cluster-and-cross-shard.md` sections 4 to 6. "Invaria
 - [ ] Soundness: no program classified independent can fail on any participant. Property test executing 1,000,000 random independent programs on random state with zero failures.
 - [ ] The server's class for a registered program equals the compiler's for the whole corpus, and a registration claiming a different class is rejected.
 - [ ] `settle_trade` from document 03 is classified independent and `place_order` single-shard; both in the golden report.
+- [ ] `settle_trade` of document 03 section 10 compiles with its `on` blocks, so every program example in the design documents compiles (from T3.3.4).
 
 ## T5.2.7 Client: participant computation, fan-out, retry policy
 

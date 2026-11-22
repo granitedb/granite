@@ -3,6 +3,11 @@
 //! failure of a property test with
 //! `GRANITE_SEED=<seed> cargo test -p granite-schemac --test program`.
 
+#![allow(
+    clippy::duplicate_mod,
+    reason = "the validator tests' support loads the schema tests' common module too; this file needs its random types"
+)]
+
 use granite_base::constants::FORMAT;
 use granite_schema::Catalog;
 use granite_schemac::{

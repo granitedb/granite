@@ -1063,8 +1063,9 @@ pub struct Gen<'a> {
     next: u16,
     scope: Vec<(u16, GTy)>,
     pub sloppy: u64,
-    /// Leaves out what can fail: `require`, `update`, inserts into versioned
-    /// tables, arithmetic and casts.
+    /// Leaves out most of what can fail: `require`, `update`, `upsert`,
+    /// `delete`, inserts into versioned tables, arithmetic and casts. An
+    /// insert of a value read is still made.
     pub safe: bool,
 }
 
@@ -1141,7 +1142,7 @@ impl<'a> Gen<'a> {
             .filter(|&t| self.tb(t).kind == Kind::Versioned)
             .collect();
         let mut choice = self.rng.below(if depth == 0 { 7 } else { 9 });
-        if self.safe && matches!(choice, 1 | 4 | 6) {
+        if self.safe && matches!(choice, 1 | 4 | 5 | 6) {
             choice = 2;
         }
         match choice {
@@ -1154,9 +1155,12 @@ impl<'a> Gen<'a> {
             }
             1 => require(self.expr(&Type::Bool, 2)),
             2 | 3 => {
-                let t = self.pick(&tables);
+                let immutable: Vec<_> = (tables.iter().copied())
+                    .filter(|&t| self.tb(t).kind == Kind::Immutable)
+                    .collect();
+                let t = self.pick(if self.safe { &immutable } else { &tables });
                 let row = self.row(t);
-                if (self.safe || self.rng.below(2) == 0) && self.tb(t).kind == Kind::Versioned {
+                if self.rng.below(2) == 0 && self.tb(t).kind == Kind::Versioned {
                     upsert(&self.tb(t).name, row)
                 } else {
                     insert(&self.tb(t).name, row)

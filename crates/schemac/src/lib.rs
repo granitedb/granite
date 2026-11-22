@@ -64,6 +64,10 @@ impl fmt::Display for CompileError {
                         4,
                         ": a program across partitions moves no value between its participants",
                     ),
+                    granite_txn::Error::TooManyParticipants => (
+                        4,
+                        ": a cross-shard transaction has at most `participants_max` participants (document 04 section 4)",
+                    ),
                     e if (e as u8) < 8 => (1, ""),
                     _ => (2, ""),
                 };

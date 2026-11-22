@@ -215,4 +215,7 @@ pub enum Error {
     /// used on another, or `commit_ts()` reaches a `require` or an
     /// expression that can fail: no participant could evaluate it.
     ValueAcrossParticipants = 25,
+    /// A program whose accesses name more partitions than
+    /// `FORMAT.participants_max`.
+    TooManyParticipants = 26,
 }

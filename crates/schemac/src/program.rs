@@ -88,7 +88,13 @@ pub fn compile_program(
                         "arithmetic, a negation or a cast can fail, so a program annotated `independent` has none: this one makes it coordinated"
                     }
                     Fallible::Insert => {
-                        "an insert into a versioned table fails when its key exists, so a program annotated `independent` has none: this one makes it coordinated"
+                        "an insert fails when its key holds another row, unless its table is immutable and its whole row comes from parameters and literals, so a program annotated `independent` has no other: this one makes it coordinated"
+                    }
+                    Fallible::Upsert => {
+                        "an upsert is not proved to succeed, so a program annotated `independent` has none: this one makes it coordinated"
+                    }
+                    Fallible::Delete => {
+                        "a delete is not proved to succeed, so a program annotated `independent` has none: this one makes it coordinated"
                     }
                     Fallible::Update => {
                         "`update` fails when its row does not exist, so a program annotated `independent` has none: this one makes it coordinated"
@@ -1418,7 +1424,9 @@ pub fn report(catalog: &Catalog, program: &Program) -> String {
         Class::Coordinated { cause, .. } => match cause {
             Fallible::Require => "coordinated: a `require` can fail",
             Fallible::Expression => "coordinated: an expression can fail",
-            Fallible::Insert => "coordinated: an insert into a versioned table can fail",
+            Fallible::Insert => "coordinated: an insert can fail",
+            Fallible::Upsert => "coordinated: an upsert is not proved to succeed",
+            Fallible::Delete => "coordinated: a delete is not proved to succeed",
             Fallible::Update => "coordinated: an `update` can fail",
         },
     };

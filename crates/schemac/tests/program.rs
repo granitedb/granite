@@ -736,10 +736,24 @@ fn classification_errors_are_reported_at_their_place() {
             format!("{eu}\n  {}", entry_of("v", &format!("{one} @+ {one}"))),
         ),
         (
-            "an insert into a versioned table fails when its key exists, so a program annotated `independent` has none: this one makes it coordinated",
+            "an insert fails when its key holds another row, unless its table is immutable and its whole row comes from parameters and literals, so a program annotated `independent` has no other: this one makes it coordinated",
             format!(
                 "{eu}\n  @insert account {{ user: v, balance: {one}, nick: Nullable(String(8)) null, active: true }}"
             ),
+        ),
+        (
+            "an insert fails when its key holds another row, unless its table is immutable and its whole row comes from parameters and literals, so a program annotated `independent` has no other: this one makes it coordinated",
+            format!(
+                "@insert entry {{ user: u, id: u32 1, amount: match get account[u] {{ null => {one}, a => a.balance }}, kind: Enum8(4) 0 }}\n  {ev}"
+            ),
+        ),
+        (
+            "an upsert is not proved to succeed, so a program annotated `independent` has none: this one makes it coordinated",
+            format!("{eu}\n  @upsert holding {{ user: v, asset: u32 1, qty: i64 0 }}"),
+        ),
+        (
+            "a delete is not proved to succeed, so a program annotated `independent` has none: this one makes it coordinated",
+            format!("{eu}\n  @delete holding[v, u32 1]"),
         ),
         (
             "`update` fails when its row does not exist, so a program annotated `independent` has none: this one makes it coordinated",
@@ -812,9 +826,7 @@ fn classification_errors_are_reported_at_their_place() {
     );
     compile_program("fine", two_users(false, &fine).as_bytes(), &c)
         .unwrap_or_else(|e| panic!("{e}"));
-    let ts = format!(
-        "{eu}\n  upsert account {{ user: v, balance: {one}, nick: Nullable(String(8)) null, active: commit_ts() > u64 0 }}"
-    );
+    let ts = format!("{eu}\n  {ev}\n  return commit_ts() > u64 0");
     compile_program("ts", two_users(true, &ts).as_bytes(), &c).unwrap_or_else(|e| panic!("{e}"));
 
     // `on` sections: accesses on the section's participant, locals scoped to it.
@@ -823,7 +835,7 @@ fn classification_errors_are_reported_at_their_place() {
         entry_of("u", "b")
     );
     // Locals before the sections are in scope in each.
-    compile_program("on", two_users(true, &sections).as_bytes(), &c)
+    compile_program("on", two_users(false, &sections).as_bytes(), &c)
         .unwrap_or_else(|e| panic!("{e}"));
     let sections = format!("on u:\n    let x = exists account[u]\n    {eu}\n  on v:\n    {ev}");
     let p = compile_program("on", two_users(true, &sections).as_bytes(), &c)
@@ -861,6 +873,31 @@ fn classification_errors_are_reported_at_their_place() {
         &c,
         text("expected a statement"),
         &two_users(false, "if true {\n    @on u:\n  }"),
+    );
+}
+
+/// At most `participants_max` partitions: one more is rejected at the
+/// access that names it.
+#[test]
+fn a_program_names_at_most_participants_max_partitions() {
+    use granite_base::constants::FORMAT;
+    let c = catalog();
+    let max = FORMAT.participants_max;
+    let users = |n: u64| -> String {
+        let rows: Vec<String> = (0..n)
+            .map(|i| entry_of(&format!("u64 {i}"), "Decimal(18, 2) 1.00"))
+            .collect();
+        format!("program p(u: u64)\n  {}\n", rows.join("\n  "))
+    };
+    let p = compile_program("max", users(max).as_bytes(), &c).unwrap_or_else(|e| panic!("{e}"));
+    assert!(report(&c, &p).contains("\n-- independent; "));
+    let e = compile_program("x.program", users(max + 1).as_bytes(), &c).unwrap_err();
+    assert_eq!(
+        e.to_string(),
+        format!(
+            "x.program:{}:3: program rule 26 TooManyParticipants (document 03 section 5.4): a cross-shard transaction has at most `participants_max` participants (document 04 section 4)",
+            max + 2
+        )
     );
 }
 
@@ -924,6 +961,8 @@ fn classes_match_the_hand_classification() {
                             Fallible::Require => "require",
                             Fallible::Expression => "expression",
                             Fallible::Insert => "insert",
+                            Fallible::Upsert => "upsert",
+                            Fallible::Delete => "delete",
                             Fallible::Update => "update",
                         };
                         format!("coordinated {cause}")
@@ -932,7 +971,11 @@ fn classes_match_the_hand_classification() {
             }
             Err(CompileError {
                 problem:
-                    Problem::Program(e @ (Error::MustBeSingleShard | Error::ValueAcrossParticipants)),
+                    Problem::Program(
+                        e @ (Error::MustBeSingleShard
+                        | Error::ValueAcrossParticipants
+                        | Error::TooManyParticipants),
+                    ),
                 ..
             }) => format!("rejected {e:?}"),
             Err(e) => format!("{e}"),
@@ -945,5 +988,5 @@ fn classes_match_the_hand_classification() {
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
     println!("{} cases: {seen:?}", cases.len());
     assert!(cases.len() >= 100);
-    assert_eq!(seen.len(), 8, "every class, cause and rule: {seen:?}");
+    assert_eq!(seen.len(), 11, "every class, cause and rule: {seen:?}");
 }

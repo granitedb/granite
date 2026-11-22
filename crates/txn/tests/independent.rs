@@ -1,7 +1,8 @@
 //! Soundness of the classification (document 03 section 5.4): no invocation
 //! of a program classified independent fails, on random parameters and
-//! random state, under the fresh-id rule (an invocation inserts into an
-//! immutable table only at keys that hold no row). The full run is
+//! random state, under the fresh-id rule: no other transaction has used
+//! an id the invocation inserts into an immutable table, so the keys hold
+//! no row (document 03 section 5.4). The full run is
 //! `GRANITE_FULL=1 cargo test --release --locked -p granite-txn --test independent -- --nocapture`.
 
 mod support;
@@ -36,10 +37,6 @@ fn independent_programs_never_fail() {
         let Ok(Classification { class, partitions }) = p.classify(&catalog, &report) else {
             continue;
         };
-        assert!(
-            !(safe && matches!(class, Class::Coordinated { .. })),
-            "nothing can fail, yet {class:?}: {p:?}"
-        );
         if class != Class::Independent {
             continue;
         }

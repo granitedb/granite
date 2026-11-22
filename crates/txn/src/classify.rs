@@ -4,6 +4,7 @@
 //! the server derives it again at registration and never takes a client's.
 
 use crate::{BinOp, Error, Expr, Invalid, Program, Provenance, Report, Stmt};
+use granite_base::constants::FORMAT;
 use granite_schema::{Catalog, Kind};
 use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Bound;
@@ -19,14 +20,19 @@ pub enum Class {
     Coordinated { node: u32, cause: Fallible },
 }
 
-/// What can make an invocation fail.
+/// What can make an invocation fail, or what the classifier does not
+/// prove infallible (document 03 section 5.4).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Fallible {
     Require,
     /// Arithmetic, a negation or a cast, which can overflow or not fit.
     Expression,
-    /// An insert into a versioned table, which fails when the key exists.
+    /// An insert into a versioned table, which fails when the key exists,
+    /// or into an immutable table with a row not fixed by the parameters,
+    /// which a retry can find with other content (`exists_different`).
     Insert,
+    Upsert,
+    Delete,
     /// An update, which fails when the row does not exist.
     Update,
 }
@@ -68,7 +74,8 @@ impl Program {
     /// whose accesses do not all name one partition computed from the
     /// parameters; and, with `ValueAcrossParticipants`, a program across
     /// partitions in which one participant would need a value only another
-    /// has (document 03 section 5.4).
+    /// has; and, with `TooManyParticipants`, one whose accesses name more
+    /// than `FORMAT.participants_max` partitions (document 03 section 5.4).
     pub fn classify<'p>(
         &'p self,
         catalog: &Catalog,
@@ -116,6 +123,13 @@ impl Program {
                 }
             }
             Class::SingleShard
+        } else if let Some(a) = (report.accesses.iter()).find(|a| {
+            u64::try_from(w.at[&a.node].0).expect("usize fits u64") >= FORMAT.participants_max
+        }) {
+            return Err(Invalid {
+                error: Error::TooManyParticipants,
+                node: a.node,
+            });
         } else if let Some(node) = w.flow {
             return Err(Invalid {
                 error: Error::ValueAcrossParticipants,
@@ -147,7 +161,7 @@ struct Walk {
     control: Src,
     /// The first node where a participant would need another's value.
     flow: Option<u32>,
-    /// The first node that can fail.
+    /// The first node, in the order of the encoding, that can fail.
     fallible: Option<(u32, Fallible)>,
 }
 
@@ -170,7 +184,10 @@ impl Walk {
     /// `node` can fail. Across partitions a coordinated participant decides
     /// whether it fails when it votes, before `commit_ts()` is known.
     fn fails(&mut self, node: u32, cause: Fallible, src: &Src) {
-        self.fallible.get_or_insert((node, cause));
+        // An expression is met before the statement that holds it ends.
+        if self.fallible.is_none_or(|(first, _)| node < first) {
+            self.fallible = Some((node, cause));
+        }
         if (src.ts || self.control.ts) && self.flow.is_none() {
             self.flow = Some(node);
         }
@@ -226,12 +243,18 @@ impl Walk {
                 let c = self.expr(cond);
                 self.fails(node, Fallible::Require, &c);
             }
-            Stmt::Insert { row, .. } | Stmt::Upsert { row, .. } => {
+            Stmt::Insert { row, .. } => {
                 let src = self.exprs(row);
                 self.access(node, &src);
-                if matches!(s, Stmt::Insert { .. }) && self.at[&node].1 {
+                // A row fixed by the parameters is the same on a retry.
+                if self.at[&node].1 || src.depends() || self.control.depends() {
                     self.fails(node, Fallible::Insert, &Src::default());
                 }
+            }
+            Stmt::Upsert { row, .. } => {
+                let src = self.exprs(row);
+                self.access(node, &src);
+                self.fails(node, Fallible::Upsert, &Src::default());
             }
             Stmt::Update { key, set, .. } => {
                 let mut src = self.exprs(key);
@@ -244,6 +267,7 @@ impl Walk {
             Stmt::Delete { key, .. } => {
                 let src = self.exprs(key);
                 self.access(node, &src);
+                self.fails(node, Fallible::Delete, &Src::default());
             }
             Stmt::For { scan, body } => {
                 self.locals.push(Src::default());

@@ -256,7 +256,7 @@ Design references: `docs/02-replication.md` sections 9 and 10, `docs/04-cluster-
 
 **Gates.**
 - [ ] At every moment of the simulation, the standby site's executed state equals the primary site's state at timestamp Ta, for every table and every group (checker over cluster seed gate 100,000 with arbitrary shipping delays and all faults).
-- [ ] No cross-shard transaction is ever applied on some standby groups and not others (checker).
+- [ ] No read at the standby site, and no promoted state, ever sees a cross-shard transaction applied on some groups and not others, although groups execute up to Ta at their own pace (checker).
 - [ ] Ta never decreases, including across coordinator restarts (assertion and test).
 - [ ] A coordinator crash stops Ta advancing but breaks nothing; a restarted coordinator resumes (test).
 - [ ] With one group's shipping stalled, Ta stalls, the lag is reported with the group named, and unapplied prepares stay inside the WAL bound or the group falls back to checkpoint sync (test).

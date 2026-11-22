@@ -1,0 +1,3 @@
+program "every form"(u: u64, a: u32, "get": Nullable(i64), l: bool)
+  let l_0 = get account[u]
+require not is_null(l_0) and (not lpro org

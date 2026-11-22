@@ -1,0 +1,2 @@
+program p(u: u16)
+return exists account[u, u]

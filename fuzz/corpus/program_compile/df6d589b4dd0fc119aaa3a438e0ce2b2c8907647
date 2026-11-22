@@ -1,0 +1,4 @@
+program "every form"(u: u32, a: u32, "get": Nullable(i64), l: bool)
+  let l_0 = get account[u]
+  let l_1 = match l_0 { null => Decimal(18, 2) -1.50 / Decimal(09, 2) 0.01 - -l_1 {
+    insert entry { user: u, i4 2)

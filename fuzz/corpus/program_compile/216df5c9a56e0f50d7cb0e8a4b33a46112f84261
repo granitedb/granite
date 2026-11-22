@@ -1,0 +1,2 @@
+program "every form"(u: u64, a: u32, "00000t": Nullable(i64),  "get": Nullable(i64), l: bool)
+ ick: N

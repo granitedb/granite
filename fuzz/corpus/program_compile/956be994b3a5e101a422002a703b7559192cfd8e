@@ -1,0 +1,4 @@
+program p(u: u64)
+  if true { let x = u64 1}
+  let l_0 = get account[u]
+  let l_1 = match l_0 { null => Decimal(18, 2) -1.50, l_not is_

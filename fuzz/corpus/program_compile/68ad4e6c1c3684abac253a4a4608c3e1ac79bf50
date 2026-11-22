@@ -1,0 +1,2 @@
+program p(u: u32)
+  delete entry[u, u32 1]

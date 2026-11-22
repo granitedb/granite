@@ -1,0 +1,7 @@
+program "ev if commit_ts() = ) a\"\"b\", active: false }
+  } else {
+    delete holding[u, cast(u64 7, u32)]
+  }
+  for l_3 in scan holding[u, >= u32 1, < a] limit 10 {
+    upsert holding { user: l_3.user, asset: l_3.asset, qty: l_3.qty + i64 1 }
+    if commit_ts() = u64 0 or u = u64 1 = l { u64 2)

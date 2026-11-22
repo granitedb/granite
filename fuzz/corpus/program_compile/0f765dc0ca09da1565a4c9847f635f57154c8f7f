@@ -1,0 +1,4 @@
+program "ev if commit_t'r() = u6"(u: u64, a: u32, "get": Nullable(i64), l: bool)
+  let l_0 = get account[u]for l_4 in scan entry[u, <= u16 4] limit 0 {
+  }
+  return (u - u64 1) * (u + u64 2)

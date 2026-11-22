@@ -1,0 +1,4 @@
+program "eve form"(u: u64, a: u32, "get": Nullable(i64), l: bool)
+  let l_0 = get account[u]
+  let l_1 = match l_0 { null => Decimal(18, 2)": Nullabecimal(1 account"
+  if -(l_1 * l_1) + l_1 % Decimal(,  accexi* (u + u64 2)

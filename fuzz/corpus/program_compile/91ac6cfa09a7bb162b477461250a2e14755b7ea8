@@ -1,0 +1,2 @@
+program "evem"(u: u64, a: u32, "get": Nullable(i32), l: bool)
+  let l_0 =(u - u64 1) * (u + u64 2)

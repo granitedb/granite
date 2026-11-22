@@ -1,0 +1,4 @@
+program "every form"(u: u32,l: bool)
+  let l_0 = get account[u]
+  let l_1 = match l_0 { null =>l or exhol tiv64&
+l

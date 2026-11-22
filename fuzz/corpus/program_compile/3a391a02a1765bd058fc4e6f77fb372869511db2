@@ -1,0 +1,5 @@
+program "ev if commi64 1 = l {
+     4u64 0 y form"(u: u64, a: u32, "get": Nullable(i64), l: bool)
+  for l_3 in scan holding[u, >= u32 1, < a= u16 4] limit 0 {
+  }
+  return (u - u64 1) * (u + u64 2)

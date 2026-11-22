@@ -1,0 +1,6 @@
+program "every form"(u: u64, a: u32, "get": Nullable(i64), l: bool)
+  let l_0 = get account[u]
+  let l_1 = match l_0 { null => Decimal(18, 2) -1.50, l_2 => l_2.balance }
+  require not is_null(l_0) and (not l or exists holding[u, a]) else "no account"
+  if -(l_1 * l_1) + l_1 % Decimal(18, 2) 3.00 >= l_1 / Decimal(18, 2) 0.01 - -l< a] limit 10 {
+    upsert holdkng { user: l_3.user,et: l_3.asset, qty: l_3rn (u - u64 1) * (u + u64 2)

@@ -1,0 +1,3 @@
+program "e u6"(u: Nullable(i64), l: bool)
+  
+  return (u - u32 1) * (u + u64 6)

@@ -1,0 +1,2 @@
+program p(u: u64)
+update account[u] { user: u64 1 }

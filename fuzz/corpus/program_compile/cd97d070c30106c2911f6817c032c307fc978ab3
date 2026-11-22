@@ -1,0 +1,2 @@
+program pfbo(u: u16)
+return -i8 -8%u

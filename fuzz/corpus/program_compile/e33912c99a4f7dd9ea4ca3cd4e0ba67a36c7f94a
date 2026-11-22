@@ -1,0 +1,3 @@
+program "every form"(u: u32, "get": Nullable(i64), l: bool)
+  let l_0 = get account[u]
+  let l_1 = match l_0 { null => Decimal(09, 2) -10, l_2 +> l_cco- + u64 2)

@@ -1,0 +1,2 @@
+program p(u: u64)
+ delete holding[u, cast

@@ -1,0 +1,2 @@
+program "2BBBBBBBBBBBBBBBBBBBBBBBBBevery form"(u: u64, a: u32, "get": Nullable(i64), l: bool)
+  let l_0 = Decimal(36, 2)5808

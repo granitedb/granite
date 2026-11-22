@@ -1,0 +1,2 @@
+program "eveform"(u: u32,l: bool)
+  let l_0 = Decimal(51, 2)  -0000000000000000100

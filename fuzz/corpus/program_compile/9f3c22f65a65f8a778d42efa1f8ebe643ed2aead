@@ -1,0 +1,2 @@
+program mp(u: u32)
+  for r in scan entry[u] limit 3{ }

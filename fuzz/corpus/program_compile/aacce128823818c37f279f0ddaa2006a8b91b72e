@@ -1,0 +1,2 @@
+program p(u: u32)
+  return u  +-u64 0

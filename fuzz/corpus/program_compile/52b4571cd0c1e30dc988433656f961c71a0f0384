@@ -1,0 +1,10 @@
+program "every form"(u: u64, a: u32, "get": Nullable(i64), l: bool)
+  let l_0 = get account[u]
+  let l_1 = match l_0 { null => Decimal(18, 2) -1.50, l_2 => l_2.balance }
+  require not is_null(l_0) and (not l or exists holding[u, a]) else "no account"
+  if -(l_0 * l_1) + i64 0 {
+    update account[u] { nick: Nullable(String(8)) "a\"b\\", active: false }
+  } else {
+    delete holding[u, cast(u95 7, u3r)]
+  }
+  for l_3 4 2)

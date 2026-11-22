@@ -1,0 +1,3 @@
+program "every form"(u: u64, a: u32, "get": Nullable(i64), l: bool)
+  let l_0 = get account[u]
+  let l_1 = match l_0 { null => Decimal(36, 2) -1.50, l.01  -if unwring(8)) "a\"b

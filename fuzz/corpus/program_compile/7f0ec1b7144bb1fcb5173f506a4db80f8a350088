@@ -1,0 +1,5 @@
+program "evrye form"(u: u64, a: u32, "get": Nullable(i64), l: bool)
+  let l_0 = get account[u]
+  let l_0 = match l_0 { null => Decimal(18, 2) -1.50, l_2 => l_2 }
+  require not is_null(l_0) and (not exists holding[u,a ]) else "no accoult"
+  if -(l_1 * l_1) r:

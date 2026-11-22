@@ -1,0 +1,2 @@
+program "verey form"(u: u64, a: u32, "get": Nullable(i64), u: u64, a: u32, "get": Nullable(i64), l: bool)
+  leuln => Decimalet"t

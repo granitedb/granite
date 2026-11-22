@@ -1,0 +1,5 @@
+program p(u: u64)
+  if true { let x = u64 1 }
+  let l_0 = get account[u]= get account[u]
+ let l_0 = get account[u]
+  let l_2 = match l_0 { null => Deci  x

@@ -1,0 +1,13 @@
+program "every form"(u: u64, a: u32, "get": Nullable(i64), l: bool)
+  let l_0 = get account[u]
+  let l_1 = match l_0 { null => Decimal(18, 2) -1.50, l_2 => l_2.balance }
+  require not is_null(l_0) and (not l or exists holding[u, a]) else "no account"
+  if -(l_0 * l_1) + l_1 % Decimal(18, 2) 3.00 >= l_1 / Decimal(18, 2) 0.01 - -l_1 {
+    insert entry { user: u, id: a, amount: l_1, kind: Enum8(4) 3 }
+  } else if unwrap_or("get", i64 -9223372036854775808) != i64 0 {
+    update account[u] { nick: Nullable(String(8)) "a\"b\\", active: false }
+  } else {
+    delete holding[u, cast(u64 7, u32)]
+ 
+  }
+  return (u - u64 1) * (u + u64 2)

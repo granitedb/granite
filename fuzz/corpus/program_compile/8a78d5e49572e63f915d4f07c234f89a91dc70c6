@@ -1,0 +1,3 @@
+program "eveWWWWWWorm"(u: u64, a: u32, "get": bool)
+  let l_0 = get account[u]
+  let l_1 = match l_0 { null => Decimal(01, 1) -1> (not l or ex

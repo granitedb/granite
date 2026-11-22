@@ -8,14 +8,17 @@
 //! unbounded loops or recursion. Whether a tree is a valid program (types,
 //! bounds, names) is checked by [`Program::validate`] against a catalog
 //! (section 5.2), which also reports each access's key provenance and
-//! partition-key expressions.
+//! partition-key expressions. [`Program::classify`] then decides whether
+//! it is single-shard, independent or coordinated.
 
 use granite_types::{Type, Value};
 use std::ops::Bound;
 
+mod classify;
 mod encoding;
 mod validate;
 
+pub use classify::{Class, Classification, Fallible, Partition};
 pub use validate::{Access, AccessKind, Guard, Invalid, Local, Provenance, Report};
 
 /// The version of the IR and its encoding, its first two bytes.
@@ -204,4 +207,12 @@ pub enum Error {
     /// An invocation's parameter values are not of the declared types
     /// ([`Program::check_params`]).
     ParamType = 23,
+    /// A program with a dependent access whose accesses do not all name one
+    /// partition, by the same expressions, computed from the parameters: a
+    /// program with dependent keys must be single-shard.
+    MustBeSingleShard = 24,
+    /// A program across partitions in which a value read on one partition is
+    /// used on another, or `commit_ts()` reaches a `require` or an
+    /// expression that can fail: no participant could evaluate it.
+    ValueAcrossParticipants = 25,
 }

@@ -98,10 +98,10 @@ The first application is an exchange whose transactions are between two arbitrar
 
 ### Classification, decided statically per program
 
-- **Independent:** the program contains only statements that cannot fail: idempotent inserts into immutable tables (with their overflow-free derived folds) and non-aborting `audit` checks. No participant can abort, so no participant needs another's decision. Example: `settle_trade` in document 03 section 10.
-- **Coordinated:** any `require`, any write to a versioned table that can fail, or a global unique index. Example: debit A only if A has funds and credit B atomically, without a prior hold.
+- **Independent:** the program contains only statements that cannot fail: idempotent inserts into immutable tables (with their overflow-free derived folds), upserts, deletes, reads and non-aborting `audit` checks, and no expression that can fail. No participant can abort, so no participant needs another's decision. Example: `settle_trade` in document 03 section 10.
+- **Coordinated:** any `require`, any write to a versioned table that can fail (an insert, an update), any expression that can fail (arithmetic, a cast), or a global unique index. Example: debit A only if A has funds and credit B atomically, without a prior hold.
 
-The compiler reports the class of every program, and a program can be annotated `independent` so that compilation fails if a later edit would silently make it coordinated.
+The exact rules are in document 03 section 5.4. Since votes carry no values, a program across partitions in which one participant would need a value read on another is rejected. The compiler reports the class and shard set of every program, and a program can be annotated `independent` so that compilation fails if a later edit would silently make it coordinated. The server derives the class again at registration and never takes the client's.
 
 ### Independent transaction
 

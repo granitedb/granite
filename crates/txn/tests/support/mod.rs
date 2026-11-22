@@ -479,6 +479,49 @@ pub fn shard_set(
     Ok(set)
 }
 
+/// A table and an encoded primary key in it.
+pub type RowKey = ((usize, usize), Vec<u8>);
+
+/// The table and encoded primary key of each insert into an immutable
+/// table outside a `for`, evaluated from the parameters alone, whether or
+/// not its guards hold: every row an invocation of an independent program
+/// may insert into an immutable table.
+pub fn immutable_inserts(
+    catalog: &Catalog,
+    program: &Program,
+    report: &Report,
+    params: &[Value],
+) -> Result<Vec<RowKey>, Fail> {
+    fn walk(x: &mut Exec<'_>, stmts: &[Stmt], out: &mut Vec<RowKey>) -> Result<(), Fail> {
+        for s in stmts {
+            match s {
+                Stmt::Insert { table, row } => {
+                    let (g, t, tb) = x.table(table);
+                    if tb.kind == Kind::Immutable {
+                        let key = (tb.primary_key.iter())
+                            .map(|&(c, _)| x.key_value(&row[usize::from(c)]))
+                            .collect::<Result<Vec<_>, _>>()?;
+                        out.push(((g, t), Exec::encoded(tb, &key)?));
+                    }
+                }
+                Stmt::If {
+                    then, otherwise, ..
+                } => {
+                    walk(x, then, out)?;
+                    walk(x, otherwise, out)?;
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+    let mut x = Exec::new(catalog, program, report, params, 0);
+    x.from_params = true;
+    let mut out = Vec::new();
+    walk(&mut x, &program.body, &mut out)?;
+    Ok(out)
+}
+
 struct Exec<'a> {
     catalog: &'a Catalog,
     report: &'a Report<'a>,
@@ -1020,6 +1063,9 @@ pub struct Gen<'a> {
     next: u16,
     scope: Vec<(u16, GTy)>,
     pub sloppy: u64,
+    /// Leaves out what can fail: `require`, `update`, inserts into versioned
+    /// tables, arithmetic and casts.
+    pub safe: bool,
 }
 
 impl<'a> Gen<'a> {
@@ -1031,6 +1077,7 @@ impl<'a> Gen<'a> {
             next: 0,
             scope: Vec::new(),
             sloppy,
+            safe: false,
         }
     }
 
@@ -1093,7 +1140,11 @@ impl<'a> Gen<'a> {
         let versioned: Vec<_> = (tables.iter().copied())
             .filter(|&t| self.tb(t).kind == Kind::Versioned)
             .collect();
-        match self.rng.below(if depth == 0 { 7 } else { 9 }) {
+        let mut choice = self.rng.below(if depth == 0 { 7 } else { 9 });
+        if self.safe && matches!(choice, 1 | 4 | 6) {
+            choice = 2;
+        }
+        match choice {
             0 => {
                 let n = self.local();
                 let ty = self.pick(&types());
@@ -1105,7 +1156,7 @@ impl<'a> Gen<'a> {
             2 | 3 => {
                 let t = self.pick(&tables);
                 let row = self.row(t);
-                if self.rng.below(2) == 0 && self.tb(t).kind == Kind::Versioned {
+                if (self.safe || self.rng.below(2) == 0) && self.tb(t).kind == Kind::Versioned {
                     upsert(&self.tb(t).name, row)
                 } else {
                     insert(&self.tb(t).name, row)
@@ -1238,13 +1289,15 @@ impl<'a> Gen<'a> {
             c => match (c - leaves, ty) {
                 (0, Type::Nullable(i)) => self.expr(i, d),
                 (0, t)
-                    if matches!(t, Type::U16 | Type::U32 | Type::U64 | Type::I64) || *t == DEC =>
+                    if !self.safe
+                        && (matches!(t, Type::U16 | Type::U32 | Type::U64 | Type::I64)
+                            || *t == DEC) =>
                 {
                     let op =
                         self.pick(&[BinOp::Add, BinOp::Sub, BinOp::Mul, BinOp::Div, BinOp::Rem]);
                     bin(op, self.expr(t, d), self.expr(t, d))
                 }
-                (1, t) if *t == DEC || matches!(t, Type::U64 | Type::I64) => {
+                (1, t) if !self.safe && (*t == DEC || matches!(t, Type::U64 | Type::I64)) => {
                     let from = self.pick(&[Type::U16, Type::U32, Type::I64, DEC]);
                     Expr::Cast(Box::new(self.expr(&from, d)), t.clone())
                 }

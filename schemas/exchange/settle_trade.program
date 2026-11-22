@@ -1,0 +1,26 @@
+-- The independent program of document 03 section 10: settle a trade whose
+-- funds place_order has held. b1 to b3 and s1 to s4 are fresh entry ids.
+independent program settle_trade(trade_id: Id128, buyer: u64, seller: u64, base: u32, quote: u32,
+                                 qty: Decimal(38, 18), cost: Decimal(38, 18), fee: Decimal(38, 18),
+                                 traded: Timestamp(6), b1: Id128, b2: Id128, b3: Id128,
+                                 s1: Id128, s2: Id128, s3: Id128, s4: Id128)
+  on buyer:
+    insert entry { id: b1, user_id: buyer, asset: quote, kind: Enum8(credit, debit, hold, release) 3,
+                   amount: cost, ref: trade_id }
+    insert entry { id: b2, user_id: buyer, asset: quote, kind: Enum8(credit, debit, hold, release) 1,
+                   amount: cost, ref: trade_id }
+    insert entry { id: b3, user_id: buyer, asset: base, kind: Enum8(credit, debit, hold, release) 0,
+                   amount: qty, ref: trade_id }
+    insert trade_leg { user_id: buyer, trade_id, side: Enum8(buy, sell) 0, base, quote, qty, cost,
+                       fee: Decimal(38, 18) 0, traded }
+  on seller:
+    insert entry { id: s1, user_id: seller, asset: base, kind: Enum8(credit, debit, hold, release) 3,
+                   amount: qty, ref: trade_id }
+    insert entry { id: s2, user_id: seller, asset: base, kind: Enum8(credit, debit, hold, release) 1,
+                   amount: qty, ref: trade_id }
+    insert entry { id: s3, user_id: seller, asset: quote, kind: Enum8(credit, debit, hold, release) 0,
+                   amount: cost, ref: trade_id }
+    insert entry { id: s4, user_id: seller, asset: quote, kind: Enum8(credit, debit, hold, release) 1,
+                   amount: fee, ref: trade_id }
+    insert trade_leg { user_id: seller, trade_id, side: Enum8(buy, sell) 1, base, quote, qty, cost,
+                       fee, traded }

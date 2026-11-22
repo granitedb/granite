@@ -42,7 +42,7 @@ pub struct CompileError {
 pub enum Problem {
     /// A catalog rule of document 03 section 1.1 is broken.
     Rule(Error),
-    /// A program rule of document 03 section 5.1 (codes 1 to 7) or 5.2 (from 8) is broken.
+    /// A program rule of document 03 section 5.1 (codes 1 to 7), 5.2 (8 to 23) or 5.4 (from 24) is broken.
     Program(granite_txn::Error),
     /// The text does not follow the grammar, or names a group not declared before it.
     Text(&'static str),
@@ -55,10 +55,21 @@ impl fmt::Display for CompileError {
         match self.problem {
             Problem::Rule(e) => write!(f, "rule {} {e:?} (document 03 section 1.1)", e as u8),
             Problem::Program(e) => {
-                let section = if (e as u8) < 8 { 1 } else { 2 };
+                let (section, why) = match e {
+                    granite_txn::Error::MustBeSingleShard => (
+                        4,
+                        ": a program with dependent keys must be single-shard, so all its accesses name one partition, computed from the parameters",
+                    ),
+                    granite_txn::Error::ValueAcrossParticipants => (
+                        4,
+                        ": a program across partitions moves no value between its participants",
+                    ),
+                    e if (e as u8) < 8 => (1, ""),
+                    _ => (2, ""),
+                };
                 write!(
                     f,
-                    "program rule {} {e:?} (document 03 section 5.{section})",
+                    "program rule {} {e:?} (document 03 section 5.{section}){why}",
                     e as u8
                 )
             }

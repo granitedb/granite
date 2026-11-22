@@ -1,0 +1,8 @@
+independent program p(u: u64, v: u64, a: u32, d: Decimal(18, 2), t: bool)
+  let x = exists account[u]
+  on u:
+    insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+    upsert account { user: u, balance: d, nick: Nullable(String(8)) null, active: x }
+  on v:
+    delete holding[v, a]
+    insert entry { user: v, id: a, amount: d, kind: Enum8(4) 1 }

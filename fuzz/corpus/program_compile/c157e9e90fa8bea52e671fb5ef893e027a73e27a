@@ -1,0 +1,7 @@
+program p(u: u64, v: u64, a: u32, d: Decimal(18, 2))
+  let b = match get account[u] { null => d, x => x.balance }
+  require b >= d else Low
+  on u:
+    update account[u] { balance: b - d }
+  on v:
+    insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }

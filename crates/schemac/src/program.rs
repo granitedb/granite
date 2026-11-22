@@ -11,18 +11,20 @@ use crate::{CompileError, Fail, Parser, Pos, Problem, Token, name, ty, utf8};
 use granite_base::constants::FORMAT;
 use granite_schema::{Catalog, Table};
 use granite_txn::{
-    AccessKind, BinOp, Error, Expr, Guard, Local, Param, Program, Provenance, Report, Scan, Stmt,
+    AccessKind, BinOp, Class, Error, Expr, Fallible, Guard, Invalid, Local, Param, Program,
+    Provenance, Report, Scan, Stmt,
 };
 use granite_types::arith::{self, Op};
 use granite_types::{Type, Value, decimal_width};
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
-use std::ops::Bound;
+use std::ops::{Bound, RangeInclusive};
 
 /// Compiles the program text `source`, read from `file`, against `catalog`,
-/// which must be valid, and validates the program (document 03 section
-/// 5.2). `file` is used only in errors.
+/// which must be valid, validates and classifies the program (document 03
+/// sections 5.2 and 5.4), and checks its `on` sections and its
+/// `independent` annotation. `file` is used only in errors.
 pub fn compile_program(
     file: &str,
     source: &[u8],
@@ -42,14 +44,59 @@ pub fn compile_program(
         bound: BTreeSet::new(),
         spans: Vec::new(),
         depth: 0,
+        independent: None,
+        sections: Vec::new(),
     };
     let (program, at) = c.program().map_err(|(pos, problem)| fail(pos, problem))?;
-    if let Err(i) = program.validate(catalog) {
-        let pos = match i.node {
-            0 => at,
-            n => c.spans[usize::try_from(n).expect("u32 fits usize") - 1],
+    let span = |node: u32| match node {
+        0 => at,
+        n => c.spans[usize::try_from(n).expect("u32 fits usize") - 1],
+    };
+    let invalid = |i: Invalid| fail(span(i.node), Problem::Program(i.error));
+    let report = program.validate(catalog).map_err(invalid)?;
+    let class = program.classify(catalog, &report).map_err(invalid)?.class;
+    for (key, nodes) in &c.sections {
+        let mut group = None;
+        for a in (report.accesses.iter()).filter(|a| nodes.contains(&a.node)) {
+            let same = a.partition_key.len() == key.len()
+                && a.partition_key.iter().zip(key).all(|(x, y)| *x == y)
+                && *group.get_or_insert(a.group) == a.group;
+            if !same {
+                return Err(fail(
+                    span(a.node),
+                    Problem::Text(
+                        "an access in an `on` section is on its participant: its partition key is the section's names, in one table group",
+                    ),
+                ));
+            }
+        }
+    }
+    if let Some(at) = c.independent {
+        let (pos, message) = match class {
+            Class::Independent => return Ok(program),
+            Class::SingleShard => (
+                at,
+                "the program is annotated `independent`, but all its accesses name one partition, so it is single-shard",
+            ),
+            Class::Coordinated { node, cause } => (
+                span(node),
+                match cause {
+                    Fallible::Require => {
+                        "`require` can fail, so a program annotated `independent` has none: this one makes it coordinated"
+                    }
+                    Fallible::Expression => {
+                        "arithmetic, a negation or a cast can fail, so a program annotated `independent` has none: this one makes it coordinated"
+                    }
+                    Fallible::Insert => {
+                        "an insert into a versioned table fails when its key exists, so a program annotated `independent` has none: this one makes it coordinated"
+                    }
+                    Fallible::Update => {
+                        "`update` fails when its row does not exist, so a program annotated `independent` has none: this one makes it coordinated"
+                    }
+                },
+            ),
         };
-        return Err(fail(pos, Problem::Program(i.error)));
+        return Err(fail(pos, Problem::Text(message)));
     }
     Ok(program)
 }
@@ -190,6 +237,11 @@ struct Compiler<'a, 'c> {
     spans: Vec<Pos>,
     /// How deeply the parser has recursed.
     depth: u32,
+    /// Where `independent` is, if the program is annotated so.
+    independent: Option<Pos>,
+    /// Each `on` section's participant, as partition-key expressions, and
+    /// the nodes of its statements.
+    sections: Vec<(Vec<Expr>, RangeInclusive<u32>)>,
 }
 
 impl<'c> Compiler<'_, 'c> {
@@ -249,8 +301,13 @@ impl<'c> Compiler<'_, 'c> {
         self.scope.push((name, Expr::Local(local)));
     }
 
-    /// `program NAME ( [NAME : TYPE {, NAME : TYPE}] ) { statement }`, to the end of the file.
+    /// `[independent] program NAME ( [NAME : TYPE {, NAME : TYPE}] ) { statement }
+    /// { on NAME {, NAME} : { statement } }`, to the end of the file.
     fn program(&mut self) -> Result<(Program, Pos), Fail> {
+        if self.p.is("independent") {
+            self.independent = Some(self.at());
+            self.p.advance()?;
+        }
         let at = self
             .p
             .keyword("program", "expected `program` at the start")?;
@@ -271,17 +328,53 @@ impl<'c> Compiler<'_, 'c> {
             self.scope.push((name.clone(), Expr::Param(i)));
             params.push(Param { name, ty });
         }
-        let body = self.block(false)?;
+        // The statements before any `on` section: their locals stay in scope.
+        let mut body = self.nested(|c| {
+            let mut stmts = Vec::new();
+            while !c.p.is("on") && c.p.token != Token::End {
+                stmts.push(c.stmt()?);
+            }
+            Ok(stmts)
+        })?;
+        while self.p.is("on") {
+            self.p.advance()?;
+            let mut key = Vec::new();
+            loop {
+                let (name, at) = self.p.name()?;
+                let e = self.scope.iter().rev().find(|(n, _)| *n == name);
+                let e = e.ok_or((
+                    at,
+                    Problem::Text("expected a parameter or local naming the participant"),
+                ))?;
+                key.push(e.1.clone());
+                if self.p.token != Token::Comma {
+                    break;
+                }
+                self.p.advance()?;
+            }
+            self.punct(":", "expected `,` or `:` after the participant")?;
+            let first = u32::try_from(self.spans.len()).expect("nodes are bounded") + 1;
+            body.extend(self.block(false)?);
+            let last = u32::try_from(self.spans.len()).expect("nodes are bounded");
+            self.sections.push((key, first..=last));
+        }
         Ok((Program { name, params, body }, at))
     }
 
-    /// Statements up to `}` when `braced`, else to the end of the file.
-    /// Locals bound here go out of scope at its end.
+    /// Statements up to `}` when `braced`, else to `on` or the end of the
+    /// file. Locals bound here go out of scope at its end.
     fn block(&mut self, braced: bool) -> Result<Vec<Stmt>, Fail> {
         self.nested(|c| {
             let mark = c.scope.len();
             let mut stmts = Vec::new();
-            while !(braced && c.is_punct("}")) && c.p.token != Token::End {
+            let end = |c: &Self| {
+                if braced {
+                    c.is_punct("}")
+                } else {
+                    c.p.is("on")
+                }
+            };
+            while !end(c) && c.p.token != Token::End {
                 stmts.push(c.stmt()?);
             }
             c.scope.truncate(mark);
@@ -1246,12 +1339,13 @@ impl<'p, 'c> Printer<'p, 'c> {
     }
 }
 
-/// What the validator found out about a program that validates against
-/// `catalog` and whose parameter names differ: its canonical text, then its
-/// bounds, how each local is bound, and every access with its table, key
-/// provenance, partition-key expressions and the conditions it runs under,
-/// outermost first (document 03 section 5.2). Expressions use the names of
-/// the canonical text.
+/// What the validator found out about a program that validates and
+/// classifies against `catalog` and whose parameter names differ: its
+/// canonical text, then its bounds, how each local is bound, every access
+/// with its table, key provenance, partition-key expressions and the
+/// conditions it runs under, outermost first (document 03 section 5.2), and
+/// its class and shard set (section 5.4). Expressions use the names of the
+/// canonical text.
 pub fn report(catalog: &Catalog, program: &Program) -> String {
     let report = validated(catalog, program);
     let mut p = Printer::new(catalog, program, &report);
@@ -1316,5 +1410,24 @@ pub fn report(catalog: &Catalog, program: &Program) -> String {
         }
         let _ = writeln!(out, "{line}");
     }
+    let classification = program.classify(catalog, &report);
+    let classification = classification.expect("a compiled program classifies");
+    let class = match classification.class {
+        Class::SingleShard => "single-shard",
+        Class::Independent => "independent",
+        Class::Coordinated { cause, .. } => match cause {
+            Fallible::Require => "coordinated: a `require` can fail",
+            Fallible::Expression => "coordinated: an expression can fail",
+            Fallible::Insert => "coordinated: an insert into a versioned table can fail",
+            Fallible::Update => "coordinated: an `update` can fail",
+        },
+    };
+    let partitions: Vec<String> = (classification.partitions.iter())
+        .map(|(g, key)| {
+            let key: Vec<String> = key.iter().map(|e| p.expr(e, 0)).collect();
+            format!("{} ({})", ident(&catalog.groups[*g].name), key.join(", "))
+        })
+        .collect();
+    let _ = writeln!(out, "-- {class}; shard set: {}", partitions.join(", "));
     out
 }

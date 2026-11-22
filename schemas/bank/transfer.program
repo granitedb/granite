@@ -1,0 +1,10 @@
+-- The transfer example of document 03 section 5.
+program transfer(from: Id128, to: Id128, amount: Decimal(38, 2), id: Id128)
+  let available = match get balance[from] {    -- read
+    null => Decimal(38, 2) 0,
+    src => src.credits - src.debits
+  }
+  require available >= amount else InsufficientFunds   -- precondition, else abort code
+  require exists account[to] else NoSuchAccount
+  insert transfer { id, from, to, amount }      -- write; derived tables update
+  return available - amount

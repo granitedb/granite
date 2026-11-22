@@ -72,7 +72,7 @@ type       u8 tag, then its parameters:
 
 ### 1.3 Schema text syntax
 
-Schemas are written as text files and compiled into the encoding of section 1.2 by `granite-schemac` (`crates/schemac`), which is client tooling: the server never links it and only the binary form crosses the wire. Its output is a function of the input bytes alone. Derived tables, programs and indexes are added to the syntax by their own tasks.
+Schemas are written as text files and compiled into the encoding of section 1.2 by `granite-schemac` (`crates/schemac`), which is client tooling: the server never links it and only the binary form crosses the wire. Its output is a function of the input bytes alone. Derived tables and indexes are added to the syntax by their own tasks; programs are written in the syntax of section 5.3 and compiled by the same tool.
 
 ```
 schema      = "schema" "version" number { group | table }
@@ -239,14 +239,18 @@ Every request carries one operation code and a batch of events for it.
 A program is a typed, bounded, deterministic procedure. It is validated when registered (or when sent inline) and invoked with parameters.
 
 ```
-program transfer(from: Id128, to: Id128, amount: Decimal(38,2), id: Id128)
-  let src = get balance[from]                  -- read
-  require src.credits - src.debits >= amount   -- precondition, else abort code
-        else InsufficientFunds
+program transfer(from: Id128, to: Id128, amount: Decimal(38, 2), id: Id128)
+  let available = match get balance[from] {    -- read
+    null => Decimal(38, 2) 0,
+    src => src.credits - src.debits
+  }
+  require available >= amount else InsufficientFunds   -- precondition, else abort code
   require exists account[to] else NoSuchAccount
-  insert transfer { id, from, to, amount }     -- write; derived tables update
-  return src.credits - src.debits - amount
+  insert transfer { id, from, to, amount }      -- write; derived tables update
+  return available - amount
 ```
+
+The text syntax is that of section 5.3, and the tables are those of `schemas/bank.schema`. A `get` gives the row or null, and a null is never an operand (section 9), so the balance is read with a `match`.
 
 IR elements:
 - `get table[key]`, `scan table[range] limit n` with n constant,
@@ -356,7 +360,7 @@ Errors (`granite_txn::Error`), whose numbers are part of the protocol; the codes
 | 6 | `TooLarge` | An encoding longer than one message. |
 | 7 | `InvalidLiteral` | A literal that is not a valid value of its type, or not in its canonical form. |
 
-Example: `program t(a: u64)` with the body `require not is_null(get acc[a]) else E` and `return a + 1` encodes as
+Example: `program t(a: u64)` with the body `require not is_null(get acc[a]) else E` and `return a + u64 1` encodes as
 
 ```
 01 00  01 74  01  01 61 03  02 00                          version 1, "t", 1 parameter "a": u64, 2 statements
@@ -424,6 +428,52 @@ Validation takes time linear in the size of the program: programs of `program_no
 | 23 | `ParamType` | An invocation's parameter values match the declared types: one per parameter, each a valid value of its type (`Type::check`), so null only for a Nullable parameter and a decimal within its precision. Not a rule of the program: `Program::check_params` checks each parameter set, and the executor runs it before the program. |
 | - | write to a derived table | Reserved: rejected once derived tables exist (T3.4.1); the catalog has none yet. |
 
+### 5.3 Program text syntax
+
+Programs are written as text files and compiled into the IR of section 5.1 by `granite-schemac` (section 1.3), against the catalog of a schema file. The compiler runs the validator and reports its errors at the text of their node. Like schemas, programs are client tooling: only the IR crosses the wire.
+
+```
+program     = "program" name "(" [ param { "," param } ] ")" { statement }
+param       = name ":" type
+statement   = "let" name "=" expr
+            | if
+            | "require" expr "else" name
+            | ( "insert" | "upsert" ) name "{" [ column { "," column } ] "}"
+            | "update" name key "{" [ name ":" expr { "," name ":" expr } ] "}"
+            | "delete" name key
+            | "for" name "in" "scan" name range "limit" number block
+            | "return" expr
+if          = "if" expr block [ "else" ( block | if ) ]
+block       = "{" { statement } "}"
+column      = name [ ":" expr ]
+key         = "[" [ expr { "," expr } ] "]"
+range       = "[" [ item { "," item } ] "]"
+item        = expr | ( ">" | ">=" | "<" | "<=" ) expr
+expr        = expr binary expr | "not" expr | "-" expr | expr "." name | "(" expr ")"
+            | literal | name
+            | ( "get" | "exists" ) name key
+            | "is_null" "(" expr ")" | "unwrap_or" "(" expr "," expr ")"
+            | "commit_ts" "(" ")" | "cast" "(" expr "," type ")"
+            | "match" expr "{" "null" "=>" expr "," name "=>" expr "}"
+binary      = "or" | "and" | "=" | "!=" | "<" | "<=" | ">" | ">=" | "+" | "-" | "*" | "/" | "%"
+literal     = "true" | "false" | type value
+value       = "null" | [ "-" ] ( decimal | "inf" | "nan" ) | "true" | "false" | quoted
+decimal     = digit { digit | letter | "." }                   with "+" or "-" allowed after "e" or "E"
+```
+
+`type`, `name`, `quoted`, `number` and comments are those of section 1.3. A range gives the key prefix first, then at most one lower bound (`>` or `>=`), then at most one upper bound (`<` or `<=`): `[u, >= a, < b]` is a prefix of one value and both bounds.
+
+- A file holds one program. Statements need no separator: each starts with its keyword.
+- Operators from the loosest: `or`, `and`, `not`, the comparisons, `+` and `-`, `*`, `/` and `%`, unary `-`, then field access. Binary operators are left-associative, so `a = b = c` is `(a = b) = c`. Every operand is evaluated (section 5.2).
+- A name in an expression stands for the innermost local of that name in scope (section 5.2), else for the parameter. Locals are bound by `let`, `for` and the second branch of `match`. The words `and`, `or`, `not`, `get`, `exists`, `is_null`, `unwrap_or`, `match`, `commit_ts`, `cast`, `true`, `false`, `null` and the type names start an expression or join two, so a parameter or local spelled like one is quoted where it is used. Elsewhere, as after `get`, `.` or `else`, any name may be bare.
+- `exists t[k]` is `not is_null(get t[k])`, and `else if` is an `else` block holding one `if`.
+- `insert` and `upsert` give every column of the table, in declaration order, each as `column: expr`, or as the column alone for the parameter or local of that name. `update` names the columns it sets, in any order.
+- `.column` names a column of the row an expression gives: a `get`, a `for` row, the local of a `match` on a row, or a `let` local bound to one of these.
+- A literal is its type and its value, as in `u64 1`, `Decimal(38, 2) 0.50`, `Nullable(u64) null` or `String(16) "text"`; `true` and `false` alone are `bool`. Integers are written in decimal; a decimal with at most its scale of fractional digits; a float as Rust writes it, or `inf` or `nan`; a Date as days since 1970-01-01, a Timestamp or Duration as its units, an Id128 as its u128, an enum as the index of its value; String in quotes with `\"` and `\\` as escapes; Uuid, Bytes and FixedBytes as hexadecimal digits in quotes.
+- Errors name the file, the line and the column, and either a program rule with its code (section 5.1 for codes 1 to 7, 5.2 from 8) or what the grammar expected. A validator error is reported where its node starts: a statement at its keyword, a binary operator at the operator, a field at its column's name, a literal at its type; node 0 (`MissingReturn`, and an encoding limit over the whole program) at `program`. The compiler finds unknown tables (`UnknownTable`), columns (`UnknownColumn`) and names itself: a name that is neither in scope nor a parameter is `UnknownLocal` where it was bound to a local earlier in the text and `UnknownParam` otherwise. A value that is not one of its type is `InvalidLiteral`, at the value; an invalid type, a file that is not UTF-8 (at its first invalid byte) and a 256th parameter are `Malformed`. More than `program_nodes_max` statements and expressions is `TooManyNodes` at the first one over, and text nested more than twice `program_depth_max` deep, parentheses included, is `TooDeep` where it gets too deep; a program within those but deeper than the IR allows is `TooDeep` at `program`. Code 23, `ParamType`, is a rule of each invocation's values, not of the text.
+- `granite-schemac print-program` prints an IR that is valid against the catalog, and whose parameters have distinct names, as canonical text: one statement per line, indented by two spaces per block; locals named by their numbers, `l0`, `l1` and so on, with an `_` added after the `l` while a parameter's name starts with the prefix; every column of a row written with its value; parentheses only where precedence needs them; decimals with exactly their scale of fractional digits; enums by their count. Compiling the printed text gives the same IR.
+- `granite-schemac report` prints a program's canonical text, then, as comments: the most rows one invocation reads and writes, the return type, what each local is bound to, and every access with its kind, table, key provenance, partition-key expressions and the conditions it runs under (section 5.2). The reference programs are in `schemas/<schema>/*.program`, compiled against `schemas/<schema>.schema`; their reports are the golden file `schemas/programs.report`, which a test compares on every `just test`.
+
 ## 6. Two-phase business patterns
 
 For workflows that span external systems, the schema library provides a standard pattern rather than a protocol feature:
@@ -484,13 +534,21 @@ table trade_leg immutable layout columnar in by_user  -- analytics-facing
   key (user_id, trade_id) ...
 
 -- single-shard, conditional: reserve funds when the order is placed
-program place_order(user, order_id, asset, amount, ...)
-  let b = get balance[user, asset]
-  require b.credits - b.debits - b.held >= amount else InsufficientFunds
-  insert entry { user, kind: hold, asset, amount, ref: order_id }
-  insert order { ... }
+program place_order(user: u64, order_id: Id128, entry_id: Id128, market: u32, asset: u32,
+                    side: Enum8(buy, sell), price: Decimal(38, 18), qty: Decimal(38, 18),
+                    amount: Decimal(38, 18), placed: Timestamp(6))
+  let available = match get balance[user, asset] {
+    null => Decimal(38, 18) 0,
+    b => b.credits - b.debits - b.held
+  }
+  require available >= amount else InsufficientFunds
+  insert entry { id: entry_id, user_id: user, asset, kind: Enum8(credit, debit, hold, release) 2,
+                 amount, ref: order_id }
+  insert order { user_id: user, id: order_id, market, side, price, qty,
+                 filled: Decimal(38, 18) 0, status: Enum8(open, filled, cancelled) 0, placed }
 
 -- cross-shard, independent: both sides are unconditional because funds are held
+-- (the `on` blocks are added to the syntax of section 5.3 by T5.2.6)
 program settle_trade(trade_id, buyer, seller, base, quote, qty, cost, fee)
   on buyer:
     insert entry { buyer, kind: release, asset: quote, amount: cost, ref: trade_id }

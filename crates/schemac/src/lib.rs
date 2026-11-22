@@ -1,6 +1,9 @@
 //! The schema text syntax of document 03 section 1.3: [`compile`] turns a
 //! schema file into the binary catalog of `granite-schema`, and [`print()`]
-//! turns a catalog back into canonical text.
+//! turns a catalog back into canonical text. The program text syntax of
+//! section 5.3: [`compile_program`] turns a program file into the IR of
+//! `granite-txn`, [`print_program`] turns a program back into canonical
+//! text, and [`report`] describes what the validator found out about it.
 //!
 //! This is client tooling. The server never links it: it reads only the
 //! binary form (`tools/crate_graph.py` keeps this crate out of `granite`).
@@ -15,6 +18,10 @@ use granite_types::key::Order;
 use granite_types::{TimePrecision, Type};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{self, Write};
+
+mod program;
+
+pub use program::{compile_program, print_program, report};
 
 /// A place in a source file. Lines and columns start at 1; a column counts characters.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -35,6 +42,8 @@ pub struct CompileError {
 pub enum Problem {
     /// A catalog rule of document 03 section 1.1 is broken.
     Rule(Error),
+    /// A program rule of document 03 section 5.1 (codes 1 to 7) or 5.2 (from 8) is broken.
+    Program(granite_txn::Error),
     /// The text does not follow the grammar, or names a group not declared before it.
     Text(&'static str),
 }
@@ -45,6 +54,14 @@ impl fmt::Display for CompileError {
         write!(f, "{}:{line}:{column}: ", self.file)?;
         match self.problem {
             Problem::Rule(e) => write!(f, "rule {} {e:?} (document 03 section 1.1)", e as u8),
+            Problem::Program(e) => {
+                let section = if (e as u8) < 8 { 1 } else { 2 };
+                write!(
+                    f,
+                    "program rule {} {e:?} (document 03 section 5.{section})",
+                    e as u8
+                )
+            }
             Problem::Text(message) => f.write_str(message),
         }
     }
@@ -58,22 +75,26 @@ pub fn compile(file: &str, source: &[u8]) -> Result<Vec<u8>, CompileError> {
         pos,
         problem,
     };
-    let text = std::str::from_utf8(source).map_err(|e| {
-        let valid = std::str::from_utf8(&source[..e.valid_up_to()]).expect("checked prefix");
-        let line_start = valid.rfind('\n').map_or(0, |i| i + 1);
-        let pos = Pos {
-            line: count(valid.matches('\n').count() + 1),
-            column: count(valid[line_start..].chars().count() + 1),
-        };
-        fail(pos, Problem::Rule(Error::Malformed))
-    })?;
-    let (catalog, spans) = Parser::new(text)
+    let text = utf8(source).map_err(|pos| fail(pos, Problem::Rule(Error::Malformed)))?;
+    let (catalog, spans) = Parser::new(text, false)
         .and_then(Parser::schema)
         .map_err(|(pos, problem)| fail(pos, problem))?;
     catalog
         .check()
         .map_err(|i| fail(locate(&spans, &i), Problem::Rule(i.error)))?;
     Ok(catalog.encode().expect("a checked catalog encodes"))
+}
+
+/// The text, or the place of its first byte that is not UTF-8.
+fn utf8(source: &[u8]) -> Result<&str, Pos> {
+    std::str::from_utf8(source).map_err(|e| {
+        let valid = std::str::from_utf8(&source[..e.valid_up_to()]).expect("checked prefix");
+        let line_start = valid.rfind('\n').map_or(0, |i| i + 1);
+        Pos {
+            line: count(valid.matches('\n').count() + 1),
+            column: count(valid[line_start..].chars().count() + 1),
+        }
+    })
 }
 
 fn count(n: usize) -> u32 {
@@ -125,18 +146,23 @@ enum Token {
     Word(String),
     /// A quoted name, unescaped.
     Quoted(String),
-    /// `None` when the number does not fit a u64.
-    Int(Option<u64>),
+    /// Digits as written; in program text also letters, `.` and an
+    /// exponent's sign, which only a literal's type gives a meaning.
+    Number(String),
     Open,
     Close,
     Comma,
+    /// Program text only: `[ ] { } : . = != < <= > >= => + - * / %`.
+    Punct(&'static str),
     End,
 }
 
-/// A recursive-descent parser over a one-token lookahead. Only types
-/// recurse, at most [`WRAPPERS_MAX`] deep, so the work is linear in the
-/// input apart from the ordered maps of names.
+/// A recursive-descent parser over a one-token lookahead. In schema text
+/// only types recurse, at most [`WRAPPERS_MAX`] deep, so the work is linear
+/// in the input apart from the ordered maps of names.
 struct Parser<'a> {
+    /// Whether this is program text, which has more punctuation and numbers.
+    program: bool,
     rest: std::iter::Peekable<std::str::Chars<'a>>,
     line: u32,
     column: u32,
@@ -150,8 +176,9 @@ struct Parser<'a> {
 const WRAPPERS_MAX: u8 = 3;
 
 impl<'a> Parser<'a> {
-    fn new(text: &'a str) -> Result<Self, Fail> {
+    fn new(text: &'a str, program: bool) -> Result<Self, Fail> {
         let mut p = Parser {
+            program,
             rest: text.chars().peekable(),
             line: 1,
             column: 1,
@@ -190,7 +217,11 @@ impl<'a> Parser<'a> {
                 Some('-') => {
                     let at = self.here();
                     self.bump();
-                    if self.bump() != Some('-') {
+                    if self.rest.peek() != Some(&'-') {
+                        if self.program {
+                            (self.at, self.token) = (at, Token::Punct("-"));
+                            return Ok(());
+                        }
                         return Err((at, Problem::Text("expected `--` to start a comment")));
                     }
                     while self.rest.peek().is_some_and(|&c| c != '\n') {
@@ -213,15 +244,28 @@ impl<'a> Parser<'a> {
                 }
             }
             Some(c) if c.is_ascii_digit() => {
-                let mut n = Some(0u64);
-                while let Some(d) = self.rest.peek().and_then(|c| c.to_digit(10)) {
+                let mut s = String::new();
+                loop {
+                    let c = self.rest.peek().copied();
+                    let more = match c {
+                        Some(c) if self.program => {
+                            word(&c)
+                                || c == '.'
+                                || (matches!(c, '+' | '-') && s.ends_with(['e', 'E']))
+                        }
+                        Some(c) => c.is_ascii_digit(),
+                        None => false,
+                    };
+                    if !more {
+                        break;
+                    }
                     self.bump();
-                    n = n.and_then(|n| n.checked_mul(10)?.checked_add(u64::from(d)));
+                    s.extend(c);
                 }
-                if self.rest.peek().is_some_and(word) {
+                if !self.program && self.rest.peek().is_some_and(word) {
                     return Err((self.at, Problem::Text("expected a number")));
                 }
-                Token::Int(n)
+                Token::Number(s)
             }
             Some(c) if c.is_ascii_alphabetic() || c == '_' => {
                 let mut s = String::new();
@@ -250,6 +294,27 @@ impl<'a> Parser<'a> {
                     }
                 }
                 Token::Quoted(s)
+            }
+            Some(c) if self.program && "[]{}:.=!<>+*/%".contains(c) => {
+                self.bump();
+                let next = self.rest.peek().copied();
+                let two = match (c, next) {
+                    ('!', Some('=')) => "!=",
+                    ('<', Some('=')) => "<=",
+                    ('>', Some('=')) => ">=",
+                    ('=', Some('>')) => "=>",
+                    _ => "",
+                };
+                if two.is_empty() {
+                    let one = [
+                        "[", "]", "{", "}", ":", ".", "=", "<", ">", "+", "*", "/", "%",
+                    ];
+                    let one = one.into_iter().find(|p| p.starts_with(c));
+                    Token::Punct(one.ok_or((self.at, Problem::Text("unexpected character")))?)
+                } else {
+                    self.bump();
+                    Token::Punct(two)
+                }
             }
             Some(_) => return Err((self.at, Problem::Text("unexpected character"))),
         };
@@ -294,10 +359,11 @@ impl<'a> Parser<'a> {
 
     /// A number, `None` when it does not fit a u64.
     fn int(&mut self) -> Result<(Option<u64>, Pos), Fail> {
-        let Token::Int(n) = self.token else {
-            return Err((self.at, Problem::Text("expected a number")));
-        };
         let at = self.at;
+        let n = match &self.token {
+            Token::Number(s) if s.bytes().all(|b| b.is_ascii_digit()) => s.parse().ok(),
+            _ => return Err((at, Problem::Text("expected a number"))),
+        };
         self.advance()?;
         Ok((n, at))
     }
@@ -532,7 +598,7 @@ impl<'a> Parser<'a> {
         // The number of values: a count, or the declared names.
         let values = |p: &mut Self| -> Result<u64, Fail> {
             p.eat(Token::Open, "expected `(`")?;
-            let n = if matches!(p.token, Token::Int(_)) {
+            let n = if matches!(p.token, Token::Number(_)) {
                 param(p, invalid)?
             } else {
                 let mut seen = BTreeSet::new();

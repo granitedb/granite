@@ -1,6 +1,6 @@
 [package]
 name = "granite-schemac"
-description = "Schema text syntax: compiler to the binary catalog, and printer back to text. Client tooling, never linked into the server."
+description = "Schema and program text syntax: compilers to the binary catalog and program IR, and printers back to text. Client tooling, never linked into the server."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -14,4 +14,6 @@ workspace = true
 [dependencies]
 granite-base.workspace = true
 granite-schema.workspace = true
+# Programs compile to its IR and are checked by its validator.
+granite-txn.workspace = true
 granite-types.workspace = true

@@ -281,19 +281,29 @@ fn input_is_at_most_one_message() {
 
 #[test]
 fn names_and_operators_are_limited() {
-    let long = Fragment {
+    let named = |len| Fragment {
         scan: Scan {
-            table: "x".repeat(usize::from(u8::MAX) + 1),
+            table: "x".repeat(len),
             ..scan(vec![0])
         },
         operators: vec![],
     };
-    assert_eq!(long.encode(), Err(Error::Malformed));
-    let many = Fragment {
+    let ok = named(usize::from(u8::MAX));
+    assert_eq!(Fragment::decode(&ok.encode().unwrap()), Ok(ok));
+    assert_eq!(
+        named(usize::from(u8::MAX) + 1).encode(),
+        Err(Error::Malformed)
+    );
+    let limits = |n| Fragment {
         scan: scan(vec![0]),
-        operators: vec![Operator::Limit(1); usize::from(u8::MAX) + 1],
+        operators: vec![Operator::Limit(1); n],
     };
-    assert_eq!(many.encode(), Err(Error::Malformed));
+    let ok = limits(usize::from(u8::MAX));
+    assert_eq!(Fragment::decode(&ok.encode().unwrap()), Ok(ok));
+    assert_eq!(
+        limits(usize::from(u8::MAX) + 1).encode(),
+        Err(Error::Malformed)
+    );
 }
 
 #[test]

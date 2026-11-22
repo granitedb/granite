@@ -31,11 +31,48 @@ One protocol for client-to-shard and shard-to-shard traffic. TCP, one connection
 
 The header is `granite_base::header::Header`. It lives in `crates/base`, not `crates/protocol`, because WAL prepares in `crates/storage` start with it too. Compile-time assertions fix its size (`FORMAT.header_size`) and every offset above; a test compares them with this table.
 
-Command codes (0 is not a command, so an all-zero header is rejected): request 1, prepare 2, prepare_ok 3, commit 4, reply 5, start_view_change 6, do_view_change 7, start_view 8, request_start_view 9, request_headers 10, headers 11, request_prepare 12, nack_prepare 13, request_block 14, block 15, ping 16, pong 17, request_sync_checkpoint 18, sync_checkpoint 19, eviction 20, propose 21, vote 22.
+Command codes. Code 0 is not a command, so an all-zero header is rejected. Codes 1 to 20 are the messages of document 02 section 2 in table order, 21 and 22 the cross-shard messages of document 04 section 4:
 
-Operation codes: none 0 (a message that carries no operation), insert 1, upsert 2, update 3, delete 4, get 5, scan 6, execute 7, query 8.
+| Code | Command |
+|---|---|
+| 1 | request |
+| 2 | prepare |
+| 3 | prepare_ok |
+| 4 | commit |
+| 5 | reply |
+| 6 | start_view_change |
+| 7 | do_view_change |
+| 8 | start_view |
+| 9 | request_start_view |
+| 10 | request_headers |
+| 11 | headers |
+| 12 | request_prepare |
+| 13 | nack_prepare |
+| 14 | request_block |
+| 15 | block |
+| 16 | ping |
+| 17 | pong |
+| 18 | request_sync_checkpoint |
+| 19 | sync_checkpoint |
+| 20 | eviction |
+| 21 | propose |
+| 22 | vote |
 
-A received header is rejected, each reason with its own error, when: it is shorter than 256 bytes, its checksum does not match, the version is not 1, the command or operation code is unknown, a reserved byte is not zero, or `size` is below 256 or above the message limit. The body is then rejected if its length is not `size - 256` or its checksum does not match. Adding a code or changing a rule is a protocol change and raises the version.
+Operation codes. Codes 1 to 8 are the operations of document 03 section 4 in table order:
+
+| Code | Operation |
+|---|---|
+| 0 | none (a message that carries no operation) |
+| 1 | insert |
+| 2 | upsert |
+| 3 | update |
+| 4 | delete |
+| 5 | get |
+| 6 | scan |
+| 7 | execute |
+| 8 | query |
+
+A received header is rejected, each reason with its own error, when: it is shorter than 256 bytes, its checksum does not match, the version is not 1, the command or operation code is unknown, a reserved byte is not zero, or `size` is below 256 or above the message limit. The body is then rejected if its length is not `size - 256` or its checksum does not match. Later cards append codes to these tables; each addition, like any change to these rules, is a protocol change and raises the version.
 
 ### Bodies
 

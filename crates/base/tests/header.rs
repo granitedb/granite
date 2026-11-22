@@ -321,3 +321,48 @@ fn seal_refuses_a_body_over_the_limit() {
     let body = vec![0; (FORMAT.message_size_max - FORMAT.header_size) as usize + 1];
     Header::new_zeroed().seal(&body);
 }
+
+/// The rows of the markdown table under `heading` in document 05: (code, name).
+fn code_table(heading: &str) -> Vec<(u8, String)> {
+    let doc = include_str!("../../../docs/05-query-and-protocol.md");
+    doc[doc.find(heading).expect("code table")..]
+        .lines()
+        .skip(2)
+        .take_while(|l| l.starts_with('|'))
+        .map(|l| {
+            let cells: Vec<&str> = l.trim_matches('|').split('|').map(str::trim).collect();
+            let name = cells[1].split(' ').next().unwrap().to_string();
+            (cells[0].parse().unwrap(), name)
+        })
+        .collect()
+}
+
+/// `PrepareOk` -> `prepare_ok`.
+fn snake(name: impl std::fmt::Debug) -> String {
+    let mut out = String::new();
+    for c in format!("{name:?}").chars() {
+        if c.is_uppercase() && !out.is_empty() {
+            out.push('_');
+        }
+        out.push(c.to_ascii_lowercase());
+    }
+    out
+}
+
+#[test]
+fn codes_match_the_design_document() {
+    let mut h = Header::new_zeroed();
+    let codes = |table: Vec<(u8, String)>| table.into_iter().map(|(c, _)| c).collect::<Vec<_>>();
+    let commands = code_table("| Code | Command |");
+    assert_eq!(codes(commands.clone()), (1..=22).collect::<Vec<_>>());
+    for (code, name) in commands {
+        h.command = code;
+        assert_eq!(snake(h.command().unwrap()), name);
+    }
+    let operations = code_table("| Code | Operation |");
+    assert_eq!(codes(operations.clone()), (0..=8).collect::<Vec<_>>());
+    for (code, name) in operations {
+        h.operation = code;
+        assert_eq!(snake(h.operation().unwrap()), name);
+    }
+}

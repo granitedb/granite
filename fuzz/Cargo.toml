@@ -18,6 +18,7 @@ granite-schema = { path = "../crates/schema" }
 granite-schemac = { path = "../crates/schemac" }
 granite-txn = { path = "../crates/txn" }
 granite-base = { path = "../crates/base" }
+granite-query = { path = "../crates/query" }
 
 [workspace]
 
@@ -52,6 +53,20 @@ bench = false
 [[bin]]
 name = "program_validate"
 path = "fuzz_targets/program_validate.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fragment_decode"
+path = "fuzz_targets/fragment_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fragment_validate"
+path = "fuzz_targets/fragment_validate.rs"
 test = false
 doc = false
 bench = false

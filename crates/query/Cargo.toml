@@ -12,5 +12,7 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+granite-base.workspace = true
 granite-columnar.workspace = true
+granite-schema.workspace = true
 granite-types.workspace = true

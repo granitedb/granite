@@ -328,7 +328,7 @@ Expressions, one opcode byte then the operands:
 | 11 | cast | expr, type | The value as the type; fails unless it is unchanged (section 2). |
 | 12 to 24 | binary | expr, expr | `+`, `-`, `*`, `/`, `%`, `=`, `!=`, `<`, `<=`, `>`, `>=`, `and`, `or`, in that order. |
 
-Every other opcode is rejected with `UnknownOpcode`. There is no element for time other than `commit_ts()`, for randomness, external calls, dynamic table names, unbounded loops or recursion: tables are named by constants, and the only loop is `for` over a scan with a constant limit.
+Every other opcode is rejected with `UnknownOpcode`. Opcode 25 is the scan fragment's `column` (document 05 section 4), which shares the expressions without a table, parameter or local; it is not a program element. There is no element for time other than `commit_ts()`, for randomness, external calls, dynamic table names, unbounded loops or recursion: tables are named by constants, and the only loop is `for` over a scan with a constant limit.
 
 Locals are numbered from 0 in the order of their binding elements (`let`, `for`, `match`) in the encoding.
 

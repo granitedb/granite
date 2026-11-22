@@ -94,10 +94,111 @@ A fragment is a typed request built by the client library or the gateway:
 
 - `Scan(table, columns, key ranges, time range, predicate)`
 - `Project(expressions)`
-- `PartialAggregate(group keys, aggregates)` with sum, count, min, max, and mergeable deterministic sketches for distinct counts and quantiles
+- `PartialAggregate(group keys, aggregates)` with sum, count, min, max, and mergeable deterministic sketches for distinct counts and quantiles (the sketches come with T6.2.5)
 - `TopN(order, n)`, `Limit(n)`
 
-Every fragment has a static memory bound; a partial aggregate whose group table exceeds it flushes partial groups downstream instead of growing. The typed client can send fragments directly, so programmatic queries do not need the gateway.
+Every fragment has a static memory bound, which the validator computes before it runs; a fragment without one, or whose bound is over the limit, is rejected. A partial aggregate declares the size of its group table as part of that bound: when the table is full, it flushes partial groups downstream instead of growing. So "an aggregate without a group-table bound" means one that declares no size, and is rejected; an aggregate that meets more groups than it declared still runs within its bound and returns partial groups that the coordinator merges. The typed client can send fragments directly, so programmatic queries do not need the gateway.
+
+#### Elements (fragment IR version 1)
+
+A fragment (`granite_query::Fragment`) is a scan followed by up to 255 operators, each reading the rows of the one before it. The snapshot timestamp is not part of the fragment.
+
+- **Scan** reads the rows of one table, each as the values of its column list, in that order. The list names columns by index and must not be empty. It keeps the rows whose primary key is within any of the key ranges (all rows when there is none) and whose commit timestamp is within the time range, both ends included. For a versioned table, that is the version visible at the snapshot. A key range has a lower and an upper bound. Each bound is absent, inclusive or exclusive, and gives the first one or more key values, each of its key column's type. Keys are compared in key order (document 03 section 2.1) on as many values as the bound gives. The predicate, when present, is a bool over the scan's columns, and only the rows where it holds are kept.
+- **Project** turns each row into the values of its expressions.
+- **PartialAggregate** groups rows by the values of its keys and turns each group into its keys followed by its aggregates: `count` (the rows, a u64), `sum`, `min` and `max` of an expression. It holds at most `groups` groups (above zero), and when the table is full it flushes them downstream, so one group may appear in several output rows. That is why no operator may follow it (`AfterAggregate`).
+- **TopN** keeps the first n rows (n above zero) in the order of its keys, each ascending or descending. How ties are broken is T6.2.3's.
+- **Limit** keeps the first n rows.
+
+Expressions are those of the program IR (document 03 section 5.1) that need nothing but the row: literal, `-`, `not`, `is_null`, `unwrap_or`, cast and the binary operators, with the same opcodes, operands and type rules (document 03 section 5.2). One element is added, `column`, the value of a column of the input row. The program IR's parameter, local, field, `get`, `commit_ts()` and `match` are not fragment elements. There is no element for a join, a subquery, a sort of unbounded size or a write: tables are named only by the scan, and the only sort is a top-N, whose n bounds it.
+
+#### Encoding (part of the protocol)
+
+Integers are little-endian. The decoder reads at most one message and returns the tree or a typed error. Whether the tree is a valid fragment is the validator's decision. The encoding is canonical: a tree has exactly one encoding, and bytes the decoder accepts are exactly the encoding of the tree it returns. A change to any element needs a new version.
+
+```
+fragment   u16 version (1), scan, u8 operator count, operators
+scan       name (table), u16 column count, per column: u16 index,
+           u16 range count, per range: bound (lower), bound (upper),
+           u64 time lower, u64 time upper,
+           u8: 0 no predicate, 1 then expr
+bound      u8: 0 none, 1 inclusive, 2 exclusive; unless none, u16 value count, per value: type, value
+exprs      u16 count, expressions
+name       u8 length, UTF-8 bytes
+type       as in document 03 section 1.2, a valid type
+value      a literal's value, as in document 03 section 5.1
+```
+
+| Opcode | Operator | Operands |
+|---|---|---|
+| 0 | `Project` | exprs |
+| 1 | `PartialAggregate` | exprs (keys), u16 aggregate count, aggregates, u32 groups (0: none) |
+| 2 | `TopN` | u16 key count, per key: u8 order (0 ascending, 1 descending), expr; u32 n (0: none) |
+| 3 | `Limit` | u64 n |
+
+| Opcode | Aggregate | Operands |
+|---|---|---|
+| 0 | `count` | |
+| 1 | `sum` | expr |
+| 2 | `min` | expr |
+| 3 | `max` | expr |
+
+| Opcode | Expression | Operands |
+|---|---|---|
+| 0, 6 to 9, 11, 12 to 24 | literal, `-`, `not`, `is_null`, `unwrap_or`, cast, binary | as in document 03 section 5.1 |
+| 25 | `column` | u16 index |
+
+Every other opcode is rejected with `UnknownOpcode`; opcodes 4 and up of aggregates are reserved for the sketches. Zero for `groups` or `n` encodes a missing bound, which only the validator rejects, so that each kind of unbounded fragment gets its own code.
+
+Limits, each tested at its value and one over. Key ranges, key values, expressions, operators and aggregates are the fragment's elements. An expression that is an operand of the scan, an operator or an aggregate is at depth 1, and each nested expression is one deeper. A fragment shares these limits with programs, from document 03 section 8, so both IRs have the same decoder bounds: the encoded fragment is at most one message, nesting at most `program_depth_max`, the element count at most `program_nodes_max`, and a name at most 255 bytes. As for programs, the decoder's memory is proportional to its input and its largest single allocation is below 2 MiB.
+
+Example: a scan of `trade` (columns 0 and 3) from key `[7]` on, where column 1 > 0, then a partial aggregate by column 0 of `count` and `sum(column 1)` into at most 1,000 groups, encodes as follows (test `golden_fragment`):
+
+```
+01 00  05 74 72 61 64 65  02 00 00 00 03 00              version 1, "trade", columns 0 and 3
+01 00  01 01 00 03 07 00 00 00 00 00 00 00  00           1 range: [u64 7, unbounded)
+00 00 00 00 00 00 00 00  ff ff ff ff ff ff ff ff         every commit timestamp
+01  15 19 01 00 00 03 00 00 00 00 00 00 00 00            predicate column 1 > u64 0
+01  01 01 00 19 00 00  02 00 00 01 19 01 00  e8 03 00 00 1 operator: aggregate, 1,000 groups
+```
+
+#### Validation and memory bounds
+
+`Fragment::validate` checks a fragment against the catalog and computes its memory bound. The first broken rule rejects it with its code and its element, numbered from 1 in the order of the encoding. Element 0 is the fragment as a whole, with its scan's table, columns and time range. A tree that `Fragment::encode` rejects is rejected with that error at element 0.
+
+Types are those of document 03 section 5.2: a column has its logical type, LowCardinality removed. A group key, a top-N key and the operands of a comparison are neither nullable nor floats. `sum` takes an integer, decimal or float and gives its type, and `min` and `max` give their operand's type. Overflow is a typed error at run time (T6.2.3).
+
+The bound of a fragment is the sum of the bounds of its scan and its operators. B is the rows of a batch (`batch_rows_max`). w(T) is the most bytes a value of T takes in a row (document 03 section 2.4): its storage width, or 8 plus `max` for String and Bytes, plus 1 for Nullable. row(columns) is the sum of w over the columns, and E is the sum of w over every element of an operator's expressions, which is every value they compute for one row. Each operator holds one batch of its output and one batch of every value its expressions compute, B × (row(output) + E), plus its state:
+
+| Operator | State |
+|---|---|
+| `Scan` | none |
+| `Project` | none |
+| `PartialAggregate` | groups × (row(output) + 8): the group table, each entry its keys and aggregates and 8 bytes of hash index |
+| `TopN` | n × (row(input) + row(keys)): n rows, each with its order key |
+| `Limit` | none |
+
+The bound counts what the operators hold. Blocks read from parts go through the block cache, and the decoded tree is proportional to its encoding. The validator rejects a fragment whose bound is over the fragment memory limit of 512 MiB (`fragment_memory_max`). Admission control reserves the bound for each fragment when it starts, so the limit is a per-process memory reservation and belongs to the process configuration, beside `batch_rows_max`, the B it is computed with. It need not be equal on every replica. A fragment only reads: accepting or rejecting it changes no replicated state, and a coordinator whose fragment one replica rejects can retry on another. The value: one batch of a table whose rows are at the 64 KiB row limit is 4096 rows × 64 KiB = 256 MiB, so a scan of any table fits, with the same again for expression results and operator state. The configuration check asserts that one batch of the widest rows fits in half the limit. All sums saturate, so a bound past 2^64 - 1 is rejected and never wraps.
+
+| Code | Name | Rule |
+|---|---|---|
+| 1 | `Malformed` | Truncated, trailing bytes, a tag out of range, invalid UTF-8 or an invalid type; or, when encoding, a name over 255 bytes or more than 255 operators. |
+| 2 | `UnsupportedVersion` | A fragment IR version this binary does not read. |
+| 3 | `UnknownOpcode` | An operator, aggregate or expression opcode not in the tables above. |
+| 4 | `TooDeep` | Nesting deeper than `program_depth_max`. |
+| 5 | `TooManyNodes` | More elements than `program_nodes_max`. |
+| 6 | `TooLarge` | An encoding longer than one message. |
+| 7 | `InvalidLiteral` | A literal that is not a valid value of its type, or not in its canonical form. |
+| 8 | `UnknownTable` | The scanned table is in the catalog. |
+| 9 | `UnknownColumn` | Every column index names a column of the table, or of the operator's input. |
+| 10 | `TypeMismatch` | Every value has the type its place needs, and every operator and aggregate gets a type it takes. |
+| 11 | `ImplicitCast` | Two different numeric types never meet without an explicit cast. |
+| 12 | `NullableOperand` | No nullable value is used where a value is needed. |
+| 13 | `WrongArity` | A key bound gives from one value to as many as the primary key has columns. |
+| 14 | `NoColumns` | A scan has a column list. |
+| 15 | `NoGroupBound` | A partial aggregate has a group-table bound. |
+| 16 | `NoTopN` | A top-N has an n. |
+| 17 | `AfterAggregate` | No operator follows a partial aggregate. |
+| 18 | `OverMemoryLimit` | The fragment's memory bound is at most `fragment_memory_max`. |
 
 ### SQL gateway
 

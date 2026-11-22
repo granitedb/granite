@@ -165,7 +165,7 @@ Package names carry a `granite-` prefix (`crates/vsr` is the package `granite-vs
 | `crates/vsr` | Replica, client-session protocol, repair, sync, clock | storage, io |
 | `crates/meta` | Metadata state machine, balancer | vsr |
 | `crates/xshard` | Cross-shard protocol | vsr, shard |
-| `crates/query` | Scan fragment IR and vectorised operators | columnar, types |
+| `crates/query` | Scan fragment IR and vectorised operators | columnar, schema |
 | `crates/protocol` | Message definitions, validation | base, types |
 | `crates/sim` | Simulator, fault injection, checkers, reference model, and its own runner binary. Never linked into the server | all of the above |
 | `crates/granite` | The single binary: `format`, `start`, `repl`, `bench`, `version`. Process bootstrap, configuration, shard supervision, benchmark harness | everything except `sim` |

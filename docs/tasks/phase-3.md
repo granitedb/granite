@@ -251,7 +251,7 @@ Design reference for the whole phase: `docs/03-data-model-and-transactions.md`. 
 
 **Not in this card.** Distribution through the metadata group (T4.2.2); here registration is per group.
 
-**Depends on.** T3.3.3, T3.3.4.
+**Depends on.** T3.3.3, T3.3.4, T5.2.6.
 
 **Gates.**
 - [ ] Register and retire take effect at the same op on every replica (convergence checker, seed gate 10,000 with all faults).
@@ -262,6 +262,7 @@ Design reference for the whole phase: `docs/03-data-model-and-transactions.md`. 
 - [ ] The 4097th registration is rejected with a typed error.
 - [ ] The validated-program cache never changes results: two replicas with different cache sizes stay byte-identical.
 - [ ] The `transfer` example of document 03 section 5 compiles, registers and runs against a 3-replica group in an integration test, with both the success and the `InsufficientFunds` outcome checked (from T3.3.4).
+- [ ] The server's class for a registered program equals the compiler's for the whole classification corpus, and a registration claiming a different class is rejected (from T5.2.6).
 
 ## T3.4.1 Derived table definition and maintenance in the same op, with overflow-free accumulators
 

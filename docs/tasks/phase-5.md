@@ -174,16 +174,15 @@ Design reference: `docs/04-cluster-and-cross-shard.md` sections 4 to 6. "Invaria
 - The class and the shard set in the compiler's report.
 - The server re-derives the class at registration and never trusts the client's.
 
-**Not in this card.** `audit` (T5.2.11).
+**Not in this card.** `audit` (T5.2.11). The rule for global unique indexes, which do not exist yet (T5.2.12). Checking the class at registration, which needs registration (T3.3.5).
 
 **Depends on.** T3.3.4, T3.3.2.
 
 **Gates.**
-- [ ] The classifier's output matches the hand classification for a corpus of at least 100 programs covering every rule, committed with the expected class for each.
+- [ ] The classifier's output matches the hand classification for a corpus of at least 100 programs covering every rule except global unique indexes, committed with the expected class for each.
 - [ ] Adding a `require` to a program annotated `independent` fails compilation with a message naming the statement (test).
 - [ ] A program with a dependent key that spans partitions is rejected, with a message explaining that it must be single-shard.
 - [ ] Soundness: no program classified independent can fail on any participant. Property test executing 1,000,000 random independent programs on random state with zero failures.
-- [ ] The server's class for a registered program equals the compiler's for the whole corpus, and a registration claiming a different class is rejected.
 - [ ] `settle_trade` from document 03 is classified independent and `place_order` single-shard; both in the golden report.
 - [ ] `settle_trade` of document 03 section 10 compiles with its `on` blocks, so every program example in the design documents compiles (from T3.3.4).
 
@@ -311,7 +310,7 @@ Design reference: `docs/04-cluster-and-cross-shard.md` sections 4 to 6. "Invaria
 
 **Not in this card.** Global non-unique secondary indexes.
 
-**Depends on.** T5.2.4, T3.4.5.
+**Depends on.** T5.2.4, T3.4.5, T5.2.6.
 
 **Gates.**
 - [ ] Over cluster seed gate 100,000 with concurrent inserts of colliding values from many clients and all faults: at every snapshot, no two live rows in the cluster share the indexed values (checker).
@@ -320,6 +319,7 @@ Design reference: `docs/04-cluster-and-cross-shard.md` sections 4 to 6. "Invaria
 - [ ] After a delete, the value can be inserted again (test).
 - [ ] An insert whose base row and index entry fall in the same group takes the same-group shortcut (counter).
 - [ ] A report gives insert throughput and latency with a global unique index against the same table without one; the documentation quotes the ratio.
+- [ ] The classifier makes a program that inserts into a table with a global unique index coordinated, naming the index as the cause, and the classification corpus has cases for it (from T5.2.6).
 
 ## T5.3.1 Shard safe timestamp and idle heartbeats
 

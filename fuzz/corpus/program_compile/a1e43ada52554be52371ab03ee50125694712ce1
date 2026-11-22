@@ -1,0 +1,2 @@
+program pF(u: u32)
+  return u + u32 5

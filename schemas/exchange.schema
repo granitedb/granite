@@ -1,5 +1,5 @@
--- The exchange of document 03 section 10: its tables, without the derived
--- balance table and the programs, which later cards add.
+-- The exchange of document 03 section 10: its tables. Its programs are in
+-- exchange/.
 schema version 1
 
 table group by_user partition by (user_id u64) hash
@@ -13,6 +13,16 @@ table entry immutable layout row in by_user
   kind Enum8(credit, debit, hold, release),
   amount Decimal(38, 18),
   ref Id128                        -- order or trade id
+
+-- Derived from the ledger in document 03; a plain table until derived
+-- tables exist (T3.4.1).
+table balance versioned layout row in by_user
+  key (user_id, asset)
+  user_id u64,
+  asset u32,
+  credits Decimal(38, 18),
+  debits Decimal(38, 18),
+  held Decimal(38, 18)
 
 -- Open orders; status and fill change often, the rest never.
 table order versioned layout groups((status, filled), (user_id, id, market, side, price, qty, placed)) in by_user

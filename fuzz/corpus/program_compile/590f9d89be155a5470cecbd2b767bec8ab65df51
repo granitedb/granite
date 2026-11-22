@@ -1,0 +1,2 @@
+program "em"(u: u64, a: bool)
+  let l_0 = Decimal(36, 2)720368547758685808

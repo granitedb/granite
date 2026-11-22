@@ -1,0 +1,39 @@
+-- bank/transfer.program
+program transfer(from: Id128, to: Id128, amount: Decimal(38, 2), id: Id128)
+  let l0 = match get balance[from] { null => Decimal(38, 2) 0.00, l1 => l1.credits - l1.debits }
+  require l0 >= amount else InsufficientFunds
+  require exists account[to] else NoSuchAccount
+  insert transfer { id: id, from: from, to: to, amount: amount }
+  return l0 - amount
+-- reads at most 2, writes at most 1, returns Decimal(38, 2)
+-- l0 is match get balance[from] { null => Decimal(38, 2) 0.00, l1 => l1.credits - l1.debits }
+-- l1 is the value of get balance[from] where it is not null
+-- get balance: static key, partition (from)
+-- get account: static key, partition (to)
+-- insert transfer: static key, partition (id)
+
+-- exchange/cancel_orders.program
+program cancel_orders(user: u64)
+  for l0 in scan order[user] limit 16 {
+    if l0.status = Enum8(3) 0 {
+      update order[user, l0.id] { status: Enum8(3) 2 }
+    }
+  }
+-- reads at most 32, writes at most 16, returns nothing
+-- l0 is a scanned row
+-- scan order: static key, partition (user)
+-- update order: dependent key, partition (user), when l0.status = Enum8(3) 0
+
+-- exchange/place_order.program
+program place_order(user: u64, order_id: Id128, entry_id: Id128, market: u32, asset: u32, side: Enum8(2), price: Decimal(38, 18), qty: Decimal(38, 18), amount: Decimal(38, 18), placed: Timestamp(6))
+  let l0 = match get balance[user, asset] { null => Decimal(38, 18) 0.000000000000000000, l1 => l1.credits - l1.debits - l1.held }
+  require l0 >= amount else InsufficientFunds
+  insert entry { id: entry_id, user_id: user, asset: asset, kind: Enum8(4) 2, amount: amount, ref: order_id }
+  insert order { user_id: user, id: order_id, market: market, side: side, price: price, qty: qty, filled: Decimal(38, 18) 0.000000000000000000, status: Enum8(3) 0, placed: placed }
+-- reads at most 1, writes at most 2, returns nothing
+-- l0 is match get balance[user, asset] { null => Decimal(38, 18) 0.000000000000000000, l1 => l1.credits - l1.debits - l1.held }
+-- l1 is the value of get balance[user, asset] where it is not null
+-- get balance: static key, partition (user)
+-- insert entry: static key, partition (user)
+-- insert order: static key, partition (user)
+

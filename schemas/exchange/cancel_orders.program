@@ -1,0 +1,8 @@
+-- Cancel the first 16 open orders of a user. Which rows it updates depends
+-- on what the scan finds, so the program is single-shard.
+program cancel_orders(user: u64)
+  for o in scan order[user] limit 16 {
+    if o.status = Enum8(open, filled, cancelled) 0 {
+      update order[user, o.id] { status: Enum8(open, filled, cancelled) 2 }
+    }
+  }

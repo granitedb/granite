@@ -1,0 +1,2 @@
+program "every fo2m"(u: u64, a: u32, "get": Nullable(i64), l: bool)
+  let l_0 = Decimal(25, 2)  -0000000000000000005

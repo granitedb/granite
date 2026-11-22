@@ -1,0 +1,26 @@
+-- The tables of the transfer example of document 03 section 5.
+schema version 1
+
+table group accounts partition by (account Id128) hash
+
+table account versioned layout row in accounts
+  key (account)
+  account Id128,
+  owner String(64)
+
+-- Derived from the transfers in document 03; a plain table until derived
+-- tables exist (T3.4.1).
+table balance versioned layout row in accounts
+  key (account)
+  account Id128,
+  credits Decimal(38, 2),
+  debits Decimal(38, 2)
+
+table group transfers partition by (id Id128) hash
+
+table transfer immutable layout row in transfers
+  key (id)
+  id Id128,
+  from Id128,
+  to Id128,
+  amount Decimal(38, 2)

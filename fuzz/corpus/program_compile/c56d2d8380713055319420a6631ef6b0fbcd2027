@@ -1,0 +1,5 @@
+program "every form"(u: u64, a: u32, "get": Nullable(i64), l: bool)
+  let l_0 = get account[u]
+  let l_0 = get account[u]
+  let l_1 = match l_0 { null => Decimal(36, 7) -1.50, l_2 =>   reql(18, 2)>ceaurnou x
+nt:

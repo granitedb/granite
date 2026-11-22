@@ -1,0 +1,3 @@
+program "very form"(u: u64, a: u32, l: bool)
+  let l_0 = get account[u]
+  let l_0 = match l_0 { null => Decimal(18, 2) -1..0 =ir

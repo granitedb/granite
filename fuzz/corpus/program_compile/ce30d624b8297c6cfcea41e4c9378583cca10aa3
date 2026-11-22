@@ -1,0 +1,3 @@
+program "evey form"(u: u64, a: u32, "get": Nullable(i64), l: bool)
+  let l_0 = get account[u]
+  let l_1 = match l_0 { null => Decimal(1r( * (u + u64 2)

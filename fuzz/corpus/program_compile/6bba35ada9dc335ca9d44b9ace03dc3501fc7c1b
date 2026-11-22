@@ -1,0 +1,2 @@
+program "every form"(u: u64, a: u32, l: bool)
+  let l_0 = i64 0 {+ 2)

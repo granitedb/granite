@@ -1,0 +1,2 @@
+program mp(u: u32, a: u64, "get": Nullable(i64), l: bool)
+  let l_0 = get account[ Decimal(52, 2) 0) a}

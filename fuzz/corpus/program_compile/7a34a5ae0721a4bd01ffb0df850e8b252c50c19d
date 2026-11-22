@@ -1,0 +1,5 @@
+program "every form"(u: u64, "get": Nullable(i64), l: bool)
+  let l_0 = get account[u]
+  let l_1 = match l_0 { null => bool)
+  le)
+  let  a $get acco4nlt][ u>

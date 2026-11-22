@@ -1,0 +1,1 @@
+program p(u: u64)  for r in scan entry[u] limit 150 { }

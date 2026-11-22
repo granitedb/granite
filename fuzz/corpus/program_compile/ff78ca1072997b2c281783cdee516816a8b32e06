@@ -1,0 +1,3 @@
+program "every fOrm"(u: u64, a: u32, "get": Nullable(i16), l: bool)
+  let l_0 = get account[u]
+  let l_1 = i32 -9223

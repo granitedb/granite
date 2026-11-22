@@ -1,0 +1,1 @@
+program p(u: u32) return u  +-u32 10 +-u32 1601

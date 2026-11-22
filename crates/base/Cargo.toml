@@ -1,6 +1,6 @@
 [package]
 name = "granite-base"
-description = "Checksums, fixed-layout helpers, ids, error codes and constants."
+description = "Checksums, fixed-layout helpers, the message header, ids, error codes and constants."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,3 +10,9 @@ publish.workspace = true
 
 [lints]
 workspace = true
+
+[dependencies]
+# The message header (docs/06 section 5): `IntoBytes` refuses a struct with
+# padding at compile time, and `FromBytes` gives the zero-copy view without
+# `unsafe` in this crate.
+zerocopy = { version = "0.8.63", features = ["derive"] }

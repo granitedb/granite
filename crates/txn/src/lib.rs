@@ -11,6 +11,7 @@
 //! partition-key expressions. [`Program::classify`] then decides whether
 //! it is single-shard, independent or coordinated.
 
+pub use granite_types::expr::BinOp;
 use granite_types::{Type, Value};
 use std::ops::Bound;
 
@@ -126,24 +127,6 @@ pub enum Expr {
     /// The value cast to the given type, an error unless it is unchanged.
     Cast(Box<Expr>, Type),
     Binary(BinOp, Box<Expr>, Box<Expr>),
-}
-
-/// The binary operators, in the order of their opcodes.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum BinOp {
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Rem,
-    Eq,
-    Ne,
-    Lt,
-    Le,
-    Gt,
-    Ge,
-    And,
-    Or,
 }
 
 /// Why bytes are not an IR encoding, a tree cannot be encoded (1 to 7), or

@@ -4,11 +4,13 @@
 //! [`key`] is the order-preserving key encoding and [`storage`] the
 //! fixed-width storage representation; both are part of the on-disk format
 //! and are specified byte by byte in document 03 section 2. [`arith`] is the
-//! checked arithmetic, comparison and casts of the numeric types.
+//! checked arithmetic, comparison and casts of the numeric types. [`expr`]
+//! holds what the program IR and the scan fragment IR share.
 
 use granite_base::constants::FORMAT;
 
 pub mod arith;
+pub mod expr;
 pub mod key;
 pub mod storage;
 

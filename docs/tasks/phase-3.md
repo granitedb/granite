@@ -178,12 +178,12 @@ Design reference for the whole phase: `docs/03-data-model-and-transactions.md`. 
 - Shard set: the partition-key expression of every access.
 - A specific error code for each class of invalid program.
 
-**Not in this card.** Classification as independent or coordinated (T5.2.6).
+**Not in this card.** Classification as independent or coordinated (T5.2.6). Rejecting a write to a derived table, as derived tables do not exist yet (T3.4.1).
 
 **Depends on.** T3.3.1.
 
 **Gates.**
-- [ ] Each class of invalid program has at least one test rejected with its own code: type mismatch, implicit cast, null used in arithmetic, unbounded loop, bound over 256, unknown table or column, write to a derived table, wrong parameter type, missing return, and one test per remaining code. The list of codes is a table in document 03.
+- [ ] Each class of invalid program has at least one test rejected with its own code: type mismatch, implicit cast, null used in arithmetic, bound over 256, unknown table or column, wrong parameter type, missing return, and one test per remaining code. The list of codes is a table in document 03. An unbounded loop cannot be expressed in the IR: a test shows that the only loop, `for` over a scan, is bounded by a constant of the encoding, and that every element and opcode is accounted for.
 - [ ] Property: every program the validator accepts executes without a type error, without exceeding the computed read and write counts, on random parameters and random state (1,000,000 executions).
 - [ ] The computed bound is exact or an upper bound, never lower: property test comparing with counted accesses.
 - [ ] Key provenance for a corpus of 50 hand-classified programs matches the hand classification exactly.
@@ -275,7 +275,7 @@ Design reference for the whole phase: `docs/03-data-model-and-transactions.md`. 
 
 **Not in this card.** Reading derived tables in conditions (T3.4.2).
 
-**Depends on.** T3.1.1, T1.5.1, T1.4.5.
+**Depends on.** T3.1.1, T1.5.1, T1.4.5, T3.3.2.
 
 **Gates.**
 - [ ] Model test, replicated: at every op, each derived row equals the fold computed from scratch over the source table by the reference model.
@@ -286,6 +286,7 @@ Design reference for the whole phase: `docs/03-data-model-and-transactions.md`. 
 - [ ] An `exists_identical` duplicate insert does not change the derived table (test).
 - [ ] A failed linked chain or failed program invocation leaves the derived table unchanged (the gate deferred from T3.2.2).
 - [ ] Storage stays byte-identical across replicas (convergence checker, seed gate 100,000).
+- [ ] The validator rejects a program that writes to a derived table with its own code, listed in the table of validator codes in document 03 (test) (from T3.3.2).
 
 ## T3.4.5 Local unique indexes
 

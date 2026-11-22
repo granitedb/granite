@@ -69,6 +69,8 @@ pub struct Access<'p> {
     /// One expression per partition key column: the partition the access
     /// touches. Locals in it are resolved through [`Report::locals`].
     pub partition_key: Vec<&'p Expr>,
+    /// The statement or `get` expression that makes the access.
+    pub node: u32,
     /// The innermost condition the access is under, an index into
     /// [`Report::guards`]; the access happens, in an invocation that
     /// commits, exactly when every guard of the chain holds. Guards are
@@ -436,6 +438,7 @@ impl<'a, 'p> Validator<'a, 'p> {
 
     fn access(
         &mut self,
+        node: u32,
         kind: AccessKind,
         group: usize,
         table: usize,
@@ -453,6 +456,7 @@ impl<'a, 'p> Validator<'a, 'p> {
                 Provenance::Static
             },
             partition_key: key[..n].to_vec(),
+            node,
             guard: self.guard,
         });
     }
@@ -537,7 +541,7 @@ impl<'a, 'p> Validator<'a, 'p> {
                 let key: Vec<&'p Expr> = (tb.primary_key.iter())
                     .map(|&(c, _)| &row[usize::from(c)])
                     .collect();
-                self.access(kind, g, t, &key, dep);
+                self.access(node, kind, g, t, &key, dep);
                 (cost, Flow::None)
             }
             Stmt::Update { table, key, set } => {
@@ -563,7 +567,7 @@ impl<'a, 'p> Validator<'a, 'p> {
                     cost = cost.then(e.cost);
                 }
                 let key: Vec<&'p Expr> = key.iter().collect();
-                self.access(AccessKind::Update, g, t, &key, dep);
+                self.access(node, AccessKind::Update, g, t, &key, dep);
                 (cost.then(Cost::READ).then(Cost::WRITE), Flow::None)
             }
             Stmt::Delete { table, key } => {
@@ -574,7 +578,7 @@ impl<'a, 'p> Validator<'a, 'p> {
                 }
                 let (cost, dep) = self.key(tb, key)?;
                 let key: Vec<&'p Expr> = key.iter().collect();
-                self.access(AccessKind::Delete, g, t, &key, dep);
+                self.access(node, AccessKind::Delete, g, t, &key, dep);
                 (cost.then(Cost::WRITE), Flow::None)
             }
             Stmt::For { scan, body } => {
@@ -601,7 +605,7 @@ impl<'a, 'p> Validator<'a, 'p> {
                     }
                 }
                 let prefix: Vec<&'p Expr> = scan.prefix.iter().collect();
-                self.access(AccessKind::Scan, g, t, &prefix, dep);
+                self.access(node, AccessKind::Scan, g, t, &prefix, dep);
                 let limit = u64::from(scan.limit);
                 let cost = self.bounded(cost.then(Cost::READ.times(limit)), node)?;
                 // How often the body runs depends on what the scan finds.
@@ -694,7 +698,7 @@ impl<'a, 'p> Validator<'a, 'p> {
                 }
                 let (cost, dep) = self.key(tb, key)?;
                 let key: Vec<&'p Expr> = key.iter().collect();
-                self.access(AccessKind::Get, g, t, &key, dep);
+                self.access(node, AccessKind::Get, g, t, &key, dep);
                 E {
                     ty: Ty::Row {
                         group: g,

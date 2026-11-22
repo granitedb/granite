@@ -51,5 +51,8 @@ libfuzzer_sys::fuzz_target!(|bytes: &[u8]| {
             assert!(a.table < group.tables.len());
             assert_eq!(a.partition_key.len(), group.partition_key.len());
         }
+        if let Ok(c) = program.classify(&CATALOG, &report) {
+            assert!(!c.partitions.is_empty() || report.accesses.is_empty());
+        }
     }
 });

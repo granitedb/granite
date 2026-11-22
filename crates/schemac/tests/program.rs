@@ -259,7 +259,7 @@ program \"every form\"(u: u64, a: u32, \"get\": Nullable(i64), l: bool)
     delete holding[u, cast(u64 7, u32)]
   }
   for l_3 in scan holding[u, >= u32 1, < a] limit 10 {
-    upsert holding { user: l_3.user, asset: l_3.asset, qty: l_3.qty + i64 1 }
+    upsert holding { user: u, asset: l_3.asset, qty: l_3.qty + i64 1 }
     if commit_ts() = u64 0 or u = u64 1 = l {
       delete account[u]
     }
@@ -284,8 +284,8 @@ fn round_trip(catalog: &Catalog, program: &Program) {
     assert_eq!(print_program(catalog, &compiled), text);
 }
 
-/// Random valid programs of the validator tests' generator: compile, print,
-/// compile gives byte-identical IR.
+/// Random valid programs of the validator tests' generator that classify
+/// (document 03 section 5.4): compile, print, compile gives byte-identical IR.
 #[test]
 fn compile_print_compile_is_byte_identical() {
     let mut rng = support::seeded("compile_print_compile_is_byte_identical");
@@ -294,7 +294,10 @@ fn compile_print_compile_is_byte_identical() {
     let mut valid = 0;
     while valid < target {
         let program = support::Gen::new(&mut rng, &c, u64::MAX).program();
-        if program.validate(&c).is_ok() {
+        if program
+            .validate(&c)
+            .is_ok_and(|r| program.classify(&c, &r).is_ok())
+        {
             round_trip(&c, &program);
             valid += 1;
         }
@@ -470,7 +473,7 @@ program p(u: u64)
   if exists account[u] {
     delete holding[u, u32 1]
   } else {
-    let a = match get asset[u32 1] { null => false, x => exists quote[x.asset, u16 1] }
+    let a = match get holding[u, u32 1] { null => false, x => exists entry[u, x.asset] }
   }
 ";
     let program = compile_program("p", text.as_bytes(), &c).unwrap_or_else(|e| panic!("{e}"));
@@ -478,9 +481,9 @@ program p(u: u64)
     for line in [
         "-- get account: static key, partition (u)",
         "-- delete holding: dependent key, partition (u), when exists account[u]",
-        "-- get asset: dependent key, partition (u32 1), when not (exists account[u])",
-        "-- get quote: dependent key, partition (l1.asset), when not (exists account[u]) and not (is_null(get asset[u32 1]))",
-        "-- l1 is the value of get asset[u32 1] where it is not null",
+        "-- get holding: dependent key, partition (u), when not (exists account[u])",
+        "-- get entry: dependent key, partition (u), when not (exists account[u]) and not (is_null(get holding[u, u32 1]))",
+        "-- l1 is the value of get holding[u, u32 1] where it is not null",
     ] {
         assert!(r.lines().any(|l| l == line), "{line}\n{r}");
     }
@@ -510,8 +513,7 @@ fn reference_programs_match_the_golden_report() {
 }
 
 /// The programs in the code blocks of document 03: each is a reference
-/// program, which compiles, except the one written with the `on` blocks of
-/// T5.2.6.
+/// program, which compiles.
 #[test]
 fn document_examples_are_reference_programs() {
     let doc =
@@ -533,7 +535,7 @@ fn document_examples_are_reference_programs() {
                 }
                 found.push(program.take().unwrap());
             }
-            let name = line
+            let name = (line.strip_prefix("independent ").unwrap_or(line))
                 .strip_prefix("program ")
                 .and_then(|l| l.split_once('('));
             if name.is_some_and(|(n, _)| !n.contains(' ')) {
@@ -543,13 +545,17 @@ fn document_examples_are_reference_programs() {
     }
     let names: Vec<&str> = found
         .iter()
-        .map(|p| p[8..].split('(').next().unwrap())
+        .map(|p| {
+            p.split("program ")
+                .nth(1)
+                .unwrap()
+                .split('(')
+                .next()
+                .unwrap()
+        })
         .collect();
     assert_eq!(names, ["transfer", "place_order", "settle_trade"]);
     for p in &found {
-        if p.contains("\n  on ") {
-            continue;
-        }
         assert!(
             sources.iter().any(|s| s.contains(p.as_str())),
             "not a reference program:\n{p}"
@@ -695,4 +701,292 @@ fn the_tool_compiles_prints_and_reports_programs() {
     );
     let text = run(&["report".as_ref(), schema.as_os_str(), source.as_os_str()]);
     assert_eq!(String::from_utf8(text).unwrap(), report(&catalog, &program));
+}
+
+/// `program p(u: u64, v: u64)` with `body` after it, annotated `independent` if `independent`.
+fn two_users(independent: bool, body: &str) -> String {
+    let annotation = if independent { "independent " } else { "" };
+    format!("{annotation}program p(u: u64, v: u64)\n  {body}\n")
+}
+
+/// A row of `entry` for `user` with the amount `amount`.
+fn entry_of(user: &str, amount: &str) -> String {
+    format!("insert entry {{ user: {user}, id: u32 1, amount: {amount}, kind: Enum8(4) 0 }}")
+}
+
+/// The rules of document 03 section 5.4 and the `independent` annotation,
+/// each reported at the text of its node.
+#[test]
+fn classification_errors_are_reported_at_their_place() {
+    use Error as E;
+    let c = catalog();
+    let one = "Decimal(18, 2) 1.00";
+    let (eu, ev) = (entry_of("u", one), entry_of("v", one));
+    let independent = two_users(true, &format!("{eu}\n  {ev}"));
+    compile_program("ok", independent.as_bytes(), &c).unwrap_or_else(|e| panic!("{e}"));
+    let program = |e| Problem::Program(e);
+    let text = |m| Problem::Text(m);
+    let coordinated = [
+        (
+            "`require` can fail, so a program annotated `independent` has none: this one makes it coordinated",
+            format!("{eu}\n  @require exists account[v] else E\n  {ev}"),
+        ),
+        (
+            "arithmetic, a negation or a cast can fail, so a program annotated `independent` has none: this one makes it coordinated",
+            format!("{eu}\n  {}", entry_of("v", &format!("{one} @+ {one}"))),
+        ),
+        (
+            "an insert fails when its key holds another row, unless its table is immutable and its whole row comes from parameters and literals, so a program annotated `independent` has no other: this one makes it coordinated",
+            format!(
+                "{eu}\n  @insert account {{ user: v, balance: {one}, nick: Nullable(String(8)) null, active: true }}"
+            ),
+        ),
+        (
+            "an insert fails when its key holds another row, unless its table is immutable and its whole row comes from parameters and literals, so a program annotated `independent` has no other: this one makes it coordinated",
+            format!(
+                "@insert entry {{ user: u, id: u32 1, amount: match get account[u] {{ null => {one}, a => a.balance }}, kind: Enum8(4) 0 }}\n  {ev}"
+            ),
+        ),
+        (
+            "an upsert is not proved to succeed, so a program annotated `independent` has none: this one makes it coordinated",
+            format!("{eu}\n  @upsert holding {{ user: v, asset: u32 1, qty: i64 0 }}"),
+        ),
+        (
+            "a delete is not proved to succeed, so a program annotated `independent` has none: this one makes it coordinated",
+            format!("{eu}\n  @delete holding[v, u32 1]"),
+        ),
+        (
+            "`update` fails when its row does not exist, so a program annotated `independent` has none: this one makes it coordinated",
+            format!("{eu}\n  @update account[v] {{ active: true }}"),
+        ),
+    ];
+    for (message, body) in &coordinated {
+        fails(&c, text(message), &two_users(true, body));
+        // Without the annotation the same program compiles, as coordinated.
+        let plain = two_users(false, body).replace('@', "");
+        let p = compile_program("p", plain.as_bytes(), &c).unwrap_or_else(|e| panic!("{e}"));
+        let r = report(&c, &p);
+        assert!(r.contains("\n-- coordinated: "), "{r}");
+    }
+    fails(
+        &c,
+        text(
+            "the program is annotated `independent`, but all its accesses name one partition, so it is single-shard",
+        ),
+        &format!("@independent program p(u: u64)\n  {eu}\n"),
+    );
+    // A dependent access on another partition, or on one a read names.
+    fails(
+        &c,
+        program(E::MustBeSingleShard),
+        &two_users(
+            false,
+            "for r in scan entry[u] limit 2 {\n    @delete holding[v, r.id]\n  }",
+        ),
+    );
+    fails(
+        &c,
+        program(E::MustBeSingleShard),
+        &two_users(
+            false,
+            "@delete account[match get account[u] { null => u, a => a.user }]",
+        ),
+    );
+    fails(
+        &c,
+        program(E::MustBeSingleShard),
+        &two_users(
+            false,
+            "@insert quote { asset: cast(commit_ts(), u32), at: u16 0, px: i64 0 }",
+        ),
+    );
+    // A participant would need another's value.
+    let read = "let b = match get account[u] { null => Decimal(18, 2) 0.00, a => a.balance }";
+    for body in [
+        format!("{read}\n  @{}", entry_of("v", "b")),
+        format!("{eu}\n  {ev}\n  return exists account[u] @and exists account[v]"),
+        format!("{eu}\n  {ev}\n  @require commit_ts() > u64 0 else E"),
+        format!(
+            "{eu}\n  {}",
+            entry_of("v", "cast(commit_ts() @% u64 100, Decimal(18, 2))")
+        ),
+    ] {
+        fails(
+            &c,
+            program(E::ValueAcrossParticipants),
+            &two_users(false, &body),
+        );
+    }
+    // A read used on its own partition is fine; so is `commit_ts()` in a
+    // value that cannot fail.
+    let fine = format!(
+        "{read}\n  {}\n  {}",
+        entry_of("u", "b"),
+        "insert holding { user: v, asset: u32 1, qty: i64 0 }"
+    );
+    compile_program("fine", two_users(false, &fine).as_bytes(), &c)
+        .unwrap_or_else(|e| panic!("{e}"));
+    let ts = format!("{eu}\n  {ev}\n  return commit_ts() > u64 0");
+    compile_program("ts", two_users(true, &ts).as_bytes(), &c).unwrap_or_else(|e| panic!("{e}"));
+
+    // `on` sections: accesses on the section's participant, locals scoped to it.
+    let sections = format!(
+        "{read}\n  on u:\n    {}\n  on v:\n    {ev}",
+        entry_of("u", "b")
+    );
+    // Locals before the sections are in scope in each.
+    compile_program("on", two_users(false, &sections).as_bytes(), &c)
+        .unwrap_or_else(|e| panic!("{e}"));
+    let sections = format!("on u:\n    let x = exists account[u]\n    {eu}\n  on v:\n    {ev}");
+    let p = compile_program("on", two_users(true, &sections).as_bytes(), &c)
+        .unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(
+        print_program(&c, &p),
+        format!("program p(u: u64, v: u64)\n  let l0 = exists account[u]\n  {eu}\n  {ev}\n")
+    );
+    fails(
+        &c,
+        text(
+            "an access in an `on` section is on its participant: its partition key is the section's names, in one table group",
+        ),
+        &two_users(false, &format!("on u:\n    {eu}\n  on v:\n    @{eu}")),
+    );
+    fails(
+        &c,
+        program(E::UnknownLocal),
+        &two_users(
+            false,
+            "on u:\n    let x = exists account[u]\n  on v:\n    return @x",
+        ),
+    );
+    fails(
+        &c,
+        text("expected a parameter or local naming the participant"),
+        &two_users(false, "on @w:\n    return u"),
+    );
+    fails(
+        &c,
+        text("expected `,` or `:` after the participant"),
+        &two_users(false, "on u @v:\n    return u"),
+    );
+    fails(
+        &c,
+        text("expected a statement"),
+        &two_users(false, "if true {\n    @on u:\n  }"),
+    );
+}
+
+/// At most `participants_max` partitions: one more is rejected at the
+/// access that names it.
+#[test]
+fn a_program_names_at_most_participants_max_partitions() {
+    use granite_base::constants::FORMAT;
+    let c = catalog();
+    let max = FORMAT.participants_max;
+    let users = |n: u64| -> String {
+        let rows: Vec<String> = (0..n)
+            .map(|i| entry_of(&format!("u64 {i}"), "Decimal(18, 2) 1.00"))
+            .collect();
+        format!("program p(u: u64)\n  {}\n", rows.join("\n  "))
+    };
+    let p = compile_program("max", users(max).as_bytes(), &c).unwrap_or_else(|e| panic!("{e}"));
+    assert!(report(&c, &p).contains("\n-- independent; "));
+    let e = compile_program("x.program", users(max + 1).as_bytes(), &c).unwrap_err();
+    assert_eq!(
+        e.to_string(),
+        format!(
+            "x.program:{}:3: program rule 26 TooManyParticipants (document 03 section 5.4): a cross-shard transaction has at most `participants_max` participants (document 04 section 4)",
+            max + 2
+        )
+    );
+}
+
+/// The messages of the classification rules say why.
+#[test]
+fn classification_messages_explain_the_rule() {
+    let e = compile_program(
+        "x.program",
+        two_users(
+            false,
+            "for r in scan entry[u] limit 2 {\n    delete holding[v, r.id]\n  }",
+        )
+        .as_bytes(),
+        &catalog(),
+    );
+    assert_eq!(
+        e.unwrap_err().to_string(),
+        "x.program:3:5: program rule 24 MustBeSingleShard (document 03 section 5.4): a program with dependent keys must be single-shard, so all its accesses name one partition, computed from the parameters"
+    );
+    let body = format!(
+        "{}\n  require exists account[v] else E",
+        entry_of("u", "Decimal(18, 2) 1.00")
+    );
+    let e = compile_program("x.program", two_users(true, &body).as_bytes(), &catalog());
+    assert_eq!(
+        e.unwrap_err().to_string(),
+        "x.program:3:3: `require` can fail, so a program annotated `independent` has none: this one makes it coordinated"
+    );
+}
+
+/// The hand-classified corpus `classification.programs`: the classifier's
+/// class, or the rule that rejects the program, is the expected one for
+/// every case, and every class and rule has cases.
+#[test]
+fn classes_match_the_hand_classification() {
+    use granite_txn::{Class, Fallible};
+    let c = catalog();
+    let corpus = include_str!("classification.programs");
+    let header = "program p(u: u64, v: u64, w: u64, a: u32, b: u32, d: Decimal(18, 2), n: Nullable(u64), t: bool)\n";
+    let mut cases: Vec<(&str, String)> = Vec::new();
+    for line in corpus.lines() {
+        if let Some(case) = line.strip_prefix("case ") {
+            cases.push((case, header.to_string()));
+        } else if let Some((_, text)) = cases.last_mut() {
+            text.push_str(line);
+            text.push('\n');
+        }
+    }
+    let mut seen = std::collections::BTreeMap::new();
+    let mut wrong = Vec::new();
+    for (case, text) in &cases {
+        let (expected, _) = case.split_once(": ").unwrap();
+        let got = match compile_program("case", text.as_bytes(), &c) {
+            Ok(p) => {
+                let r = p.validate(&c).unwrap();
+                match p.classify(&c, &r).unwrap().class {
+                    Class::SingleShard => "single-shard".into(),
+                    Class::Independent => "independent".into(),
+                    Class::Coordinated { cause, .. } => {
+                        let cause = match cause {
+                            Fallible::Require => "require",
+                            Fallible::Expression => "expression",
+                            Fallible::Insert => "insert",
+                            Fallible::Upsert => "upsert",
+                            Fallible::Delete => "delete",
+                            Fallible::Update => "update",
+                        };
+                        format!("coordinated {cause}")
+                    }
+                }
+            }
+            Err(CompileError {
+                problem:
+                    Problem::Program(
+                        e @ (Error::MustBeSingleShard
+                        | Error::ValueAcrossParticipants
+                        | Error::TooManyParticipants),
+                    ),
+                ..
+            }) => format!("rejected {e:?}"),
+            Err(e) => format!("{e}"),
+        };
+        *seen.entry(expected).or_insert(0) += 1;
+        if got != expected {
+            wrong.push(format!("{case}: got {got}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    println!("{} cases: {seen:?}", cases.len());
+    assert!(cases.len() >= 100);
+    assert_eq!(seen.len(), 11, "every class, cause and rule: {seen:?}");
 }

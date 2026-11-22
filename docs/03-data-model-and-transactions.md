@@ -348,7 +348,7 @@ The two limits from section 8 are format constants (`granite_base::constants::FO
 
 Because each statement and expression takes at least one byte, nesting is limited and lists grow element by element, the decoder's memory is proportional to its input and its recursion to the depth limit. Its largest single allocation is below 2 MiB: a list of at most `program_nodes_max` elements, or a copy of part of an input of at most one message.
 
-Errors (`granite_txn::Error`), whose numbers are part of the protocol; the codes from 8 are the validator's (section 5.2):
+Errors (`granite_txn::Error`), whose numbers are part of the protocol; the codes from 8 to 23 are the validator's (section 5.2), from 24 the classifier's (section 5.4):
 
 | Code | Name | Meaning |
 |---|---|---|
@@ -433,7 +433,8 @@ Validation takes time linear in the size of the program: programs of `program_no
 Programs are written as text files and compiled into the IR of section 5.1 by `granite-schemac` (section 1.3), against the catalog of a schema file. The compiler runs the validator and reports its errors at the text of their node. Like schemas, programs are client tooling: only the IR crosses the wire.
 
 ```
-program     = "program" name "(" [ param { "," param } ] ")" { statement }
+program     = [ "independent" ] "program" name "(" [ param { "," param } ] ")" { statement } { section }
+section     = "on" name { "," name } ":" { statement }
 param       = name ":" type
 statement   = "let" name "=" expr
             | if
@@ -464,15 +465,46 @@ decimal     = digit { digit | letter | "." }                   with "+" or "-" a
 `type`, `name`, `quoted`, `number` and comments are those of section 1.3. A range gives the key prefix first, then at most one lower bound (`>` or `>=`), then at most one upper bound (`<` or `<=`): `[u, >= a, < b]` is a prefix of one value and both bounds.
 
 - A file holds one program. Statements need no separator: each starts with its keyword.
+- `on p:` starts a section for the participant whose partition key is `p`, a parameter or a local of the statements before the first section (one name per partition key column, in order). A section runs to the next `on` or the end of the file; its locals are in scope only in it. Every access in a section must name exactly that partition: its partition-key expressions (section 5.2) are the section's names, as written, and all its accesses are in one table group. Sections are text only: the IR holds their statements one after another, in order, so a section changes neither the program nor its class, and `print-program` prints the statements without them. They let the author state which participant does what, and the compiler check it.
+- `independent` before `program` makes compilation fail unless the program is classified independent (section 5.4): at `independent` for a single-shard program, else at the first statement or expression that makes it coordinated, with what can fail there. Like sections, the annotation is not in the IR; a registration that states a class is checked against the class the server derives (section 5.4).
 - Operators from the loosest: `or`, `and`, `not`, the comparisons, `+` and `-`, `*`, `/` and `%`, unary `-`, then field access. Binary operators are left-associative, so `a = b = c` is `(a = b) = c`. Every operand is evaluated (section 5.2).
 - A name in an expression stands for the innermost local of that name in scope (section 5.2), else for the parameter. Locals are bound by `let`, `for` and the second branch of `match`. The words `and`, `or`, `not`, `get`, `exists`, `is_null`, `unwrap_or`, `match`, `commit_ts`, `cast`, `true`, `false`, `null` and the type names start an expression or join two, so a parameter or local spelled like one is quoted where it is used. Elsewhere, as after `get`, `.` or `else`, any name may be bare.
 - `exists t[k]` is `not is_null(get t[k])`, and `else if` is an `else` block holding one `if`.
 - `insert` and `upsert` give every column of the table, in declaration order, each as `column: expr`, or as the column alone for the parameter or local of that name. `update` names the columns it sets, in any order.
 - `.column` names a column of the row an expression gives: a `get`, a `for` row, the local of a `match` on a row, or a `let` local bound to one of these.
 - A literal is its type and its value, as in `u64 1`, `Decimal(38, 2) 0.50`, `Nullable(u64) null` or `String(16) "text"`; `true` and `false` alone are `bool`. Integers are written in decimal; a decimal with at most its scale of fractional digits; a float as Rust writes it, or `inf` or `nan`; a Date as days since 1970-01-01, a Timestamp or Duration as its units, an Id128 as its u128, an enum as the index of its value; String in quotes with `\"` and `\\` as escapes; Uuid, Bytes and FixedBytes as hexadecimal digits in quotes.
-- Errors name the file, the line and the column, and either a program rule with its code (section 5.1 for codes 1 to 7, 5.2 from 8) or what the grammar expected. A validator error is reported where its node starts: a statement at its keyword, a binary operator at the operator, a field at its column's name, a literal at its type; node 0 (`MissingReturn`, and an encoding limit over the whole program) at `program`. The compiler finds unknown tables (`UnknownTable`), columns (`UnknownColumn`) and names itself: a name that is neither in scope nor a parameter is `UnknownLocal` where it was bound to a local earlier in the text and `UnknownParam` otherwise. A value that is not one of its type is `InvalidLiteral`, at the value; an invalid type, a file that is not UTF-8 (at its first invalid byte) and a 256th parameter are `Malformed`. More than `program_nodes_max` statements and expressions is `TooManyNodes` at the first one over, and text nested more than twice `program_depth_max` deep, parentheses included, is `TooDeep` where it gets too deep; a program within those but deeper than the IR allows is `TooDeep` at `program`. Code 23, `ParamType`, is a rule of each invocation's values, not of the text.
+- Errors name the file, the line and the column, and either a program rule with its code (section 5.1 for codes 1 to 7, 5.2 from 8) or what the grammar expected. A validator error is reported where its node starts: a statement at its keyword, a binary operator at the operator, a field at its column's name, a literal at its type; node 0 (`MissingReturn`, and an encoding limit over the whole program) at `program`. The compiler finds unknown tables (`UnknownTable`), columns (`UnknownColumn`) and names itself: a name that is neither in scope nor a parameter is `UnknownLocal` where it was bound to a local earlier in the text and `UnknownParam` otherwise. A value that is not one of its type is `InvalidLiteral`, at the value; an invalid type, a file that is not UTF-8 (at its first invalid byte) and a 256th parameter are `Malformed`. More than `program_nodes_max` statements and expressions is `TooManyNodes` at the first one over, and text nested more than twice `program_depth_max` deep, parentheses included, is `TooDeep` where it gets too deep; a program within those but deeper than the IR allows is `TooDeep` at `program`. Code 23, `ParamType`, is a rule of each invocation's values, not of the text. The classifier's codes 24 to 26 are reported at their node like the validator's, with a sentence saying why.
 - `granite-schemac print-program` prints an IR that is valid against the catalog, and whose parameters have distinct names, as canonical text: one statement per line, indented by two spaces per block; locals named by their numbers, `l0`, `l1` and so on, with an `_` added after the `l` while a parameter's name starts with the prefix; every column of a row written with its value; parentheses only where precedence needs them; decimals with exactly their scale of fractional digits; enums by their count. Compiling the printed text gives the same IR.
-- `granite-schemac report` prints a program's canonical text, then, as comments: the most rows one invocation reads and writes, the return type, what each local is bound to, and every access with its kind, table, key provenance, partition-key expressions and the conditions it runs under (section 5.2). The reference programs are in `schemas/<schema>/*.program`, compiled against `schemas/<schema>.schema`; their reports are the golden file `schemas/programs.report`, which a test compares on every `just test`.
+- `granite-schemac report` prints a program's canonical text, then, as comments: the most rows one invocation reads and writes, the return type, what each local is bound to, every access with its kind, table, key provenance, partition-key expressions and the conditions it runs under (section 5.2), and the class, with what makes a coordinated program coordinated, and the shard set (section 5.4). The reference programs are in `schemas/<schema>/*.program`, compiled against `schemas/<schema>.schema`; their reports are the golden file `schemas/programs.report`, which a test compares on every `just test`.
+
+### 5.4 Classification
+
+`Program::classify` decides, from a valid program and its report, how it runs (document 04 section 4). The compiler runs it after the validator, and the server runs it again when a program is registered, so a class is never taken from a client: a registration that states another class is rejected.
+
+A **partition** is a table group and the partition-key expressions of an access (section 5.2). Two accesses name the same partition when they are in one group and their expressions are equal as written: `u` and a `let` local bound to `u` are two partitions. This is conservative: a program whose partitions coincide at run time is still classified by its expressions, and the client finds at run time that one group holds them all (document 04 section 4, same-group shortcut). The program's **shard set** is its partitions, in the order of their first access.
+
+- **Single-shard:** every access names one partition, and its expressions are computed from the parameters alone, so the client finds the shard before the invocation runs. A program with no access is single-shard. A program with a dependent access (section 5.2) must be single-shard: if its accesses name more than one partition, or the partition depends on a read or on `commit_ts()`, it is rejected with `MustBeSingleShard`, at the first access that names another partition or such a one.
+- **Independent:** all accesses are static, they name at least two partitions, and nothing the classifier cannot prove infallible.
+- **Coordinated:** all accesses are static, they name at least two partitions, and something is not proved infallible: a `require`; an expression that can fail at run time (arithmetic, a negation or a cast, which can overflow, divide by zero or not fit); an `insert` into a versioned table, which fails when the key exists; an `insert` into an immutable table whose row is not fixed by the transaction (below); an `upsert`, a `delete` or an `update` (an update fails when the row does not exist; upserts become fallible with local unique indexes, T3.4.5). The classifier is conservative (document 04a section 5): what it cannot prove infallible costs speed, never correctness. The class names the first of these in the order of the encoding. Writes to a global unique index make a program coordinated too, once those indexes exist (T5.2.12).
+- A program across more than `participants_max` partitions (8, document 04 section 4, "Bounds") is rejected with `TooManyParticipants`, at the first access that names one more.
+
+What is proved infallible: reads, comparisons, `and`, `or`, `not`, `is_null`, `unwrap_or`, `match`, field access and `commit_ts()`; and an `insert` into an immutable table whose **whole row is fixed by the transaction**: every value, key and non-key, computed from parameters and literals alone, with no read, no `commit_ts()`, and no condition on either. A retry of the transaction writes the same row and gets `exists_identical` (section 9). Such an insert fails only when another row already holds its key, which the **fresh-id rule** excludes: the client gives every row it inserts into an immutable table an id that no other transaction, and no other insert of the same invocation, has used (section 9). That is a duty of the client, not a condition of the data, so the classifier assumes it. The fee of `settle_trade` in section 10 is a separate entry because `cost - fee` could overflow.
+
+**No value crosses participants.** The participants of a program across partitions exchange votes and timestamps, never values (document 04 section 4), so each participant runs only the part of the program on its partitions and the part that needs no read. Such a program is rejected with `ValueAcrossParticipants`, at the node where the rule breaks, when:
+
+- an expression, or the conditions it runs under, uses values read on two partitions;
+- an access on one partition uses a value read on another (in its row, its new values, or the conditions it runs under);
+- `commit_ts()` reaches a `require` or an expression that can fail. A coordinated participant decides whether its part fails when it votes, before the final timestamp exists; a value that cannot fail may use `commit_ts()`.
+
+A single-shard program is not subject to this rule: one shard has every value.
+
+| Code | Name | Rule |
+|---|---|---|
+| 24 | `MustBeSingleShard` | A program with dependent keys is single-shard: all its accesses name one partition, computed from the parameters. |
+| 25 | `ValueAcrossParticipants` | A program across partitions moves no value between its participants, and decides every failure without `commit_ts()`. |
+| 26 | `TooManyParticipants` | A program's accesses name at most `participants_max` partitions. |
+
+Evidence: a corpus of hand-classified programs covering every class, cause and rejection, at most and one over `participants_max` partitions (`crates/schemac/tests/classification.programs`, test `classes_match_the_hand_classification`), and a property test that runs random programs classified independent on random state and parameters under the fresh-id rule, with no failure (`crates/txn/tests/independent.rs`).
 
 ## 6. Two-phase business patterns
 
@@ -547,21 +579,37 @@ program place_order(user: u64, order_id: Id128, entry_id: Id128, market: u32, as
   insert order { user_id: user, id: order_id, market, side, price, qty,
                  filled: Decimal(38, 18) 0, status: Enum8(open, filled, cancelled) 0, placed }
 
--- cross-shard, independent: both sides are unconditional because funds are held
--- (the `on` blocks are added to the syntax of section 5.3 by T5.2.6)
-program settle_trade(trade_id, buyer, seller, base, quote, qty, cost, fee)
+-- cross-shard, independent: both sides are unconditional because funds are held;
+-- b1 to b3 and s1 to s4 are fresh entry ids
+independent program settle_trade(trade_id: Id128, buyer: u64, seller: u64, base: u32, quote: u32,
+                                 qty: Decimal(38, 18), cost: Decimal(38, 18), fee: Decimal(38, 18),
+                                 traded: Timestamp(6), b1: Id128, b2: Id128, b3: Id128,
+                                 s1: Id128, s2: Id128, s3: Id128, s4: Id128)
   on buyer:
-    insert entry { buyer, kind: release, asset: quote, amount: cost, ref: trade_id }
-    insert entry { buyer, kind: debit,   asset: quote, amount: cost, ref: trade_id }
-    insert entry { buyer, kind: credit,  asset: base,  amount: qty,  ref: trade_id }
-    insert trade_leg { buyer, trade_id, side: buy, ... }
+    insert entry { id: b1, user_id: buyer, asset: quote, kind: Enum8(credit, debit, hold, release) 3,
+                   amount: cost, ref: trade_id }
+    insert entry { id: b2, user_id: buyer, asset: quote, kind: Enum8(credit, debit, hold, release) 1,
+                   amount: cost, ref: trade_id }
+    insert entry { id: b3, user_id: buyer, asset: base, kind: Enum8(credit, debit, hold, release) 0,
+                   amount: qty, ref: trade_id }
+    insert trade_leg { user_id: buyer, trade_id, side: Enum8(buy, sell) 0, base, quote, qty, cost,
+                       fee: Decimal(38, 18) 0, traded }
   on seller:
-    ... mirror image ...
+    insert entry { id: s1, user_id: seller, asset: base, kind: Enum8(credit, debit, hold, release) 3,
+                   amount: qty, ref: trade_id }
+    insert entry { id: s2, user_id: seller, asset: base, kind: Enum8(credit, debit, hold, release) 1,
+                   amount: qty, ref: trade_id }
+    insert entry { id: s3, user_id: seller, asset: quote, kind: Enum8(credit, debit, hold, release) 0,
+                   amount: cost, ref: trade_id }
+    insert entry { id: s4, user_id: seller, asset: quote, kind: Enum8(credit, debit, hold, release) 1,
+                   amount: fee, ref: trade_id }
+    insert trade_leg { user_id: seller, trade_id, side: Enum8(buy, sell) 1, base, quote, qty, cost,
+                       fee, traded }
 ```
 
 Points this example fixes in the design:
 - **Reserve, then settle.** The conditional step (is there enough balance?) is single-shard. The two-party step has no condition left to check. This is the pending/post pattern of section 6 and how exchanges work in practice.
-- **Independent programs may contain only statements that cannot fail:** idempotent inserts into immutable tables, with their overflow-free folds. The validator enforces this; a program with a `require` that spans participants is classified coordinated.
+- **Independent programs may contain only statements that cannot fail:** idempotent inserts into immutable tables, whose rows the parameters fix, with their overflow-free folds; and reads. The classifier enforces this (section 5.4): a program across partitions with a `require`, arithmetic, an upsert, a delete or another element it cannot prove infallible is classified coordinated, and `independent` makes compilation fail if an edit makes it so. The `on` sections state which participant writes which rows (section 5.3).
 - **`audit cond else Code`** is a non-aborting check allowed in independent programs: if the condition is false the transaction still commits and a row is written to a system violations table. It catches application bugs (a settlement without a matching hold) without breaking atomicity.
 - **Shared hot rows.** An exchange fee paid into one fee account would put one shard into every transaction. Pattern: credit fees to a per-partition fee row on the payer's own shard (`user_id` of the payer, `asset = fee`), and total them with a query or a periodic sweep.
 - **Same-group shortcut.** When both users happen to live in the same group, the transaction runs as an ordinary single-shard transaction.

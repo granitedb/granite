@@ -1,0 +1,10 @@
+independent program p(u: u64, v: u64, a: u32, d: Decimal(18, 2), t: bool)
+  let x = exists account[u]
+  on u:
+    insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+    if t {
+      insert entry { user: u, id: a, amount: d, kind: Enum8(4) 1 }
+    }
+  on v:
+    insert entry { user: v, id: a, amount: d, kind: Enum8(4) 1 }
+  return x

@@ -1,0 +1,394 @@
+-- Programs over the tables of the validator tests (crates/txn/tests/support),
+-- each classified by hand (document 03 section 5.4). Each `case` line gives the
+-- expected class, or the rule that rejects the program, then what the case is.
+-- Every program has the parameters of the header below; its body follows.
+-- program p(u: u64, v: u64, w: u64, a: u32, b: u32, d: Decimal(18, 2), n: Nullable(u64), t: bool)
+
+case single-shard: no statement
+case single-shard: no access
+  return u64 1
+case single-shard: one read
+  return exists account[u]
+case single-shard: one insert
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+case single-shard: two inserts into one partition
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: u, id: b, amount: d, kind: Enum8(4) 0 }
+case single-shard: a read and an update of one partition
+  let x = exists account[u]
+  update account[u] { active: x }
+case single-shard: a require on one partition
+  require exists account[u] else NoAccount
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+case single-shard: an upsert and a delete of one partition
+  upsert account { user: u, balance: d, nick: Nullable(String(8)) null, active: t }
+  delete holding[u, a]
+case single-shard: a scan
+  for r in scan entry[u] limit 3 { }
+case single-shard: an update per scanned row: dependent, one partition
+  for r in scan entry[u] limit 2 { update account[u] { active: true } }
+case single-shard: an insert and a read in the other group
+  insert quote { asset: a, at: u16 0, px: i64 0 }
+  return exists asset[a]
+case single-shard: both branches of a parameter condition
+  if t { insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 } } else { delete account[u] }
+case single-shard: an insert under a read: dependent, one partition
+  if exists account[u] { insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 } }
+case single-shard: a delete under a match on a read
+  let x = get account[u]
+  if is_null(x) { delete holding[u, a] }
+case single-shard: arithmetic on one partition
+  update account[u] { balance: d + d }
+case single-shard: commit_ts() in a value
+  upsert holding { user: u, asset: a, qty: cast(commit_ts(), i64) }
+case single-shard: commit_ts() in a key, the partition from a parameter
+  insert entry { user: u, id: cast(commit_ts() % u64 100, u32), amount: d, kind: Enum8(4) 0 }
+case single-shard: a partition through a let of a parameter
+  let y = u
+  insert entry { user: y, id: a, amount: d, kind: Enum8(4) 0 }
+case single-shard: a partition through a match of a parameter
+  return match n { null => false, y => exists account[y] }
+case single-shard: a bounded scan
+  for r in scan holding[u, >= a] limit 4 { }
+case single-shard: nested scans and a delete per row
+  for r in scan entry[u] limit 2 { for h in scan holding[u] limit 2 { delete holding[u, h.asset] } }
+case single-shard: an insert keyed by a scanned row
+  for r in scan entry[u] limit 2 { insert entry { user: u, id: r.id, amount: d, kind: Enum8(4) 0 } }
+case single-shard: a value read and returned
+  return match get account[u] { null => d, x => x.balance }
+case single-shard: two reads of one row
+  let x = exists account[u]
+  return exists account[u] and x
+case single-shard: a require on a parameter
+  require d > Decimal(18, 2) 0.00 else Zero
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+case single-shard: three tables of one partition
+  let x = exists account[u]
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+  delete holding[u, a]
+case single-shard: a read of a row the scan found
+  for r in scan entry[u] limit 2 { require exists holding[u, r.id] else Missing }
+case single-shard: a scan in the other group
+  for r in scan quote[a] limit 5 { }
+  insert quote { asset: a, at: u16 0, px: i64 0 }
+case independent: two inserts
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+case independent: three inserts
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: w, id: a, amount: d, kind: Enum8(4) 0 }
+case independent: two rows per partition
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: u, id: b, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: v, id: b, amount: d, kind: Enum8(4) 0 }
+case coordinated upsert: two upserts of a versioned table
+  upsert account { user: u, balance: d, nick: Nullable(String(8)) null, active: t }
+  upsert account { user: v, balance: d, nick: Nullable(String(8)) null, active: t }
+case coordinated delete: two deletes
+  delete account[u]
+  delete account[v]
+case independent: an insert into each group
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+  insert quote { asset: a, at: u16 0, px: i64 0 }
+case independent: two partitions of the other group
+  insert quote { asset: a, at: u16 0, px: i64 0 }
+  insert quote { asset: b, at: u16 0, px: i64 0 }
+case independent: a read on one partition, an insert on another
+  let x = exists account[u]
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+case independent: a read returned after two inserts
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+  return exists account[u]
+case independent: inserts on either branch of a parameter
+  if t { insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 } } else { insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 } }
+case independent: a partition from a match of a parameter
+  let y = match n { null => u64 0, z => z }
+  insert entry { user: y, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+case coordinated insert: an immutable insert of a value read on its partition: the row is not fixed by the parameters
+  let b = match get account[u] { null => d, x => x.balance }
+  insert entry { user: u, id: a, amount: b, kind: Enum8(4) 0 }
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+case coordinated insert: an immutable insert of a value read in its group
+  insert quote { asset: a, at: u16 0, px: match get asset[a] { null => i64 0, x => x.price } }
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+case independent: commit_ts() in a comparison
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+  return commit_ts() > u64 0
+case independent: a scan and an insert elsewhere
+  for r in scan entry[u] limit 2 { }
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+case independent: a read in each group
+  let x = exists asset[a]
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+case independent: a parameter and a let of it name two partitions, as written
+  let y = u
+  insert entry { user: y, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: u, id: b, amount: d, kind: Enum8(4) 0 }
+case independent: two rows on one partition and one on another
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: u, id: b, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+case independent: unwrap_or names a partition
+  insert entry { user: unwrap_or(n, u), id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+case coordinated delete: deletes of two holdings
+  delete holding[u, a]
+  delete holding[v, a]
+case coordinated upsert: upserts of two holdings
+  upsert holding { user: u, asset: a, qty: i64 0 }
+  upsert holding { user: v, asset: a, qty: i64 0 }
+case independent: not and is_null in the return
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+  return not t and is_null(n)
+case independent: a constant return
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+  return u64 1
+case coordinated upsert: an upsert of a value read on its partition
+  upsert holding { user: u, asset: a, qty: match get holding[u, a] { null => i64 0, h => h.qty } }
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+case coordinated delete: a delete under a parameter
+  if not t { delete account[u] }
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+case independent: branches then another group
+  if t { insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 } } else { insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 } }
+  insert quote { asset: a, at: u16 0, px: i64 0 }
+case independent: nested parameter conditions
+  if t { if is_null(n) { insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 } } }
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+case independent: a read in the other group
+  let x = exists quote[a, u16 1]
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+case independent: comparisons of parameters in the return
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+  return a < b and d >= d and u = v
+case independent: a read compared and returned
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+  return match get account[u] { null => d, x => x.balance } > d
+case coordinated upsert: upserts of two partitions of the other group
+  upsert asset { asset: a, price: i64 1, name: String(8) "x", ticker: Nullable(i64) null }
+  upsert asset { asset: b, price: i64 1, name: String(8) "y", ticker: Nullable(i64) null }
+case coordinated require: a require on one partition, an insert on another
+  require exists account[u] else NoAccount
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+case coordinated require: a require on a parameter
+  require t else Off
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+case coordinated require: a require on a value read on its partition
+  require match get account[u] { null => d, x => x.balance } >= d else InsufficientFunds
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+case coordinated require: a require after the inserts
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+  require t else Off
+case coordinated require: a require before an update: the first
+  require t else Off
+  update account[u] { active: t }
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+case coordinated require: a require in a scan's body
+  for r in scan entry[u] limit 2 { require r.amount > d else Small }
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+case coordinated require: a require under a parameter condition
+  if t { require exists account[v] else NoAccount }
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+case coordinated require: a require then a delete
+  require exists account[u] else NoAccount
+  delete account[v]
+case coordinated require: transfer: read, require, insert
+  let b = match get account[u] { null => d, x => x.balance }
+  require b >= d else InsufficientFunds
+  require exists account[v] else NoAccount
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+case coordinated update: an update
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+  update account[v] { active: t }
+case coordinated update: an update under a parameter condition
+  if t { update account[u] { active: t } }
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+case coordinated update: an update before a require: the first
+  update account[u] { active: t }
+  require t else Off
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+case coordinated update: two updates
+  update account[u] { active: t }
+  update account[v] { active: t }
+case coordinated update: an update of a holding
+  update holding[u, a] { qty: i64 1 }
+  insert quote { asset: a, at: u16 0, px: i64 0 }
+case coordinated insert: an insert into a versioned table
+  insert account { user: v, balance: d, nick: Nullable(String(8)) null, active: t }
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+case coordinated insert: an insert into a versioned table of the other group
+  insert asset { asset: a, price: i64 1, name: String(8) "x", ticker: Nullable(i64) null }
+  insert quote { asset: b, at: u16 0, px: i64 0 }
+case coordinated insert: an insert into a versioned table before an update: the first
+  insert account { user: u, balance: d, nick: Nullable(String(8)) null, active: t }
+  update account[v] { active: t }
+case coordinated insert: inserts of two holdings
+  insert holding { user: u, asset: a, qty: i64 0 }
+  insert holding { user: v, asset: a, qty: i64 0 }
+case coordinated expression: addition in a value
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: v, id: a, amount: d + d, kind: Enum8(4) 0 }
+case coordinated expression: subtraction
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: v, id: a, amount: d - d, kind: Enum8(4) 0 }
+case coordinated expression: multiplication
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: v, id: a, amount: d * d, kind: Enum8(4) 0 }
+case coordinated expression: division
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: v, id: a, amount: d / d, kind: Enum8(4) 0 }
+case coordinated expression: remainder
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: v, id: a, amount: d % d, kind: Enum8(4) 0 }
+case coordinated expression: negation
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: v, id: a, amount: -d, kind: Enum8(4) 0 }
+case coordinated expression: a cast
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: v, id: a, amount: cast(i64 1, Decimal(18, 2)), kind: Enum8(4) 0 }
+case coordinated expression: arithmetic in a static key
+  insert entry { user: v, id: a + b, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+case coordinated expression: arithmetic in a partition key
+  insert entry { user: u + u64 1, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+case coordinated expression: arithmetic in a condition
+  if a + b > u32 0 { insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 } }
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+case coordinated expression: arithmetic in the return
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+  return d + d
+case coordinated expression: arithmetic in an unused let
+  let y = a + b
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+case coordinated upsert: an upsert holding arithmetic: the upsert comes first
+  upsert holding { user: u, asset: a, qty: i64 1 + i64 1 }
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+case coordinated expression: arithmetic on a value read on its partition, before a require: the first
+  let b = match get account[u] { null => d, x => x.balance } - d
+  require b > d else Small
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+case coordinated expression: arithmetic inside a match on a parameter
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: v, id: a, amount: match n { null => d, z => d * d }, kind: Enum8(4) 0 }
+case rejected MustBeSingleShard: a delete keyed by a scanned row on another partition
+  for r in scan entry[u] limit 2 { delete holding[v, r.id] }
+case rejected MustBeSingleShard: a partition read from a row
+  delete account[match get account[u] { null => u, x => x.user }]
+case rejected MustBeSingleShard: a partition from commit_ts()
+  insert quote { asset: cast(commit_ts(), u32), at: u16 0, px: i64 0 }
+case rejected MustBeSingleShard: an insert on another partition under a read
+  let x = get account[u]
+  if is_null(x) { insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 } }
+case rejected MustBeSingleShard: an insert on another partition under exists
+  if exists account[u] { insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 } }
+case rejected MustBeSingleShard: a read of another partition in a match branch
+  return match get account[u] { null => exists account[v], x => false }
+case rejected MustBeSingleShard: a read of the other group in a scan's body
+  for r in scan entry[u] limit 2 { let x = exists quote[a, u16 0] }
+case rejected MustBeSingleShard: an update keyed by a read of the other group
+  update holding[u, match get asset[a] { null => a, x => x.asset }] { qty: i64 0 }
+case rejected MustBeSingleShard: a scan of another partition in a scan's body
+  for r in scan entry[u] limit 1 { for h in scan holding[v] limit 1 { } }
+case rejected MustBeSingleShard: a let of a parameter and the parameter differ, as written
+  let y = u
+  for r in scan entry[u] limit 1 { insert entry { user: y, id: r.id, amount: d, kind: Enum8(4) 0 } }
+case rejected MustBeSingleShard: an insert keyed by a read
+  insert entry { user: match get account[u] { null => u, x => x.user }, id: a, amount: d, kind: Enum8(4) 0 }
+case rejected MustBeSingleShard: an insert on another partition under commit_ts()
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+  if commit_ts() > u64 0 { insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 } }
+case rejected MustBeSingleShard: a require on another partition inside a scan
+  for r in scan entry[u] limit 2 { require exists account[v] else NoAccount }
+case rejected MustBeSingleShard: a read under a read of another partition
+  if exists account[u] { let y = exists account[v] }
+case rejected ValueAcrossParticipants: a value read on one partition inserted on another
+  let b = match get account[u] { null => d, x => x.balance }
+  insert entry { user: v, id: a, amount: b, kind: Enum8(4) 0 }
+case rejected ValueAcrossParticipants: reads of two partitions combined in the return
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+  return exists account[u] and exists account[v]
+case rejected ValueAcrossParticipants: commit_ts() in a require
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+  require commit_ts() > u64 0 else Early
+case rejected ValueAcrossParticipants: commit_ts() in a cast
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: v, id: a, amount: cast(commit_ts() % u64 100, Decimal(18, 2)), kind: Enum8(4) 0 }
+case rejected ValueAcrossParticipants: a read of another partition in an update
+  update account[v] { balance: match get account[u] { null => d, x => x.balance } }
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+case rejected ValueAcrossParticipants: reads of two partitions combined in an unused let
+  let y = exists account[u] and exists account[v]
+case rejected ValueAcrossParticipants: reads of two partitions combined in a require
+  require exists account[u] and exists account[v] else Missing
+case rejected ValueAcrossParticipants: a read on one partition in an upsert on another
+  upsert account { user: v, balance: d, nick: Nullable(String(8)) null, active: exists account[u] }
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+case rejected ValueAcrossParticipants: commit_ts() in arithmetic in the return
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+  return commit_ts() + u64 1
+case rejected ValueAcrossParticipants: a value read on one partition through unwrap_or
+  insert entry { user: v, id: a, amount: unwrap_or(match get account[u] { null => Nullable(Decimal(18, 2)) null, x => x.balance }, d), kind: Enum8(4) 0 }
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+case rejected ValueAcrossParticipants: a read of one group used in the other
+  insert quote { asset: a, at: u16 0, px: i64 0 }
+  upsert holding { user: u, asset: a, qty: match get quote[a, u16 0] { null => i64 0, q => q.px } }
+case rejected ValueAcrossParticipants: commit_ts() in a require under a parameter condition
+  if t { require commit_ts() > u64 0 else Early }
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+case independent: eight partitions, the most a transaction has
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: w, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: u64 1, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: u64 2, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: u64 3, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: u64 4, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: u64 5, id: a, amount: d, kind: Enum8(4) 0 }
+case rejected TooManyParticipants: nine partitions
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: w, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: u64 1, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: u64 2, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: u64 3, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: u64 4, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: u64 5, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: u64 6, id: a, amount: d, kind: Enum8(4) 0 }
+case rejected TooManyParticipants: nine partitions across both groups
+  insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: w, id: a, amount: d, kind: Enum8(4) 0 }
+  insert entry { user: u64 1, id: a, amount: d, kind: Enum8(4) 0 }
+  insert quote { asset: a, at: u16 0, px: i64 0 }
+  insert quote { asset: b, at: u16 0, px: i64 0 }
+  insert quote { asset: u32 1, at: u16 0, px: i64 0 }
+  insert quote { asset: u32 2, at: u16 0, px: i64 0 }
+  insert quote { asset: u32 3, at: u16 0, px: i64 0 }
+case independent: an insert per participant from a parameter condition
+  if t { insert entry { user: u, id: a, amount: d, kind: Enum8(4) 0 } insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 } }
+case coordinated delete: a delete before an update: the first
+  delete account[u]
+  update account[v] { active: t }
+case coordinated upsert: an upsert under a parameter condition
+  if t { upsert account { user: u, balance: d, nick: Nullable(String(8)) null, active: t } }
+  insert entry { user: v, id: a, amount: d, kind: Enum8(4) 0 }

@@ -30,7 +30,7 @@ ALLOWED = {
     "granite-vsr": ["granite-storage", "granite-io"],
     "granite-meta": ["granite-vsr"],
     "granite-xshard": ["granite-vsr", "granite-shard"],
-    "granite-query": ["granite-columnar", "granite-types"],
+    "granite-query": ["granite-columnar", "granite-schema"],
     "granite-protocol": ["granite-base", "granite-types"],
     "granite-client": ["granite-protocol"],
     "granite-client-c": ["granite-client"],

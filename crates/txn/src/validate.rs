@@ -6,6 +6,7 @@
 use crate::{BinOp, Error, Expr, Param, Program, Stmt};
 use granite_base::constants::FORMAT;
 use granite_schema::{Catalog, Kind, Table};
+use granite_types::expr::{arithmetic, logical, numeric};
 use granite_types::{Type, Value};
 use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Bound;
@@ -176,14 +177,6 @@ struct E {
     node: u32,
 }
 
-fn logical(t: &Type) -> Type {
-    match t {
-        Type::LowCardinality(inner) => logical(inner),
-        Type::Nullable(inner) => Type::Nullable(Box::new(logical(inner))),
-        t => t.clone(),
-    }
-}
-
 fn nullable(t: &Ty) -> Option<Ty> {
     match t {
         Ty::Value(Type::Nullable(inner)) => Some(Ty::Value((**inner).clone())),
@@ -198,33 +191,6 @@ fn nullable(t: &Ty) -> Option<Ty> {
         }),
         _ => None,
     }
-}
-
-/// Integers and decimals, which have arithmetic.
-fn arithmetic(t: &Type) -> bool {
-    !matches!(
-        t,
-        Type::F32
-            | Type::F64
-            | Type::Bool
-            | Type::Date
-            | Type::Timestamp(_)
-            | Type::Duration(_)
-            | Type::Uuid
-            | Type::Id128
-            | Type::String { .. }
-            | Type::Bytes { .. }
-            | Type::FixedBytes(_)
-            | Type::Enum8 { .. }
-            | Type::Enum16 { .. }
-            | Type::Nullable(_)
-            | Type::LowCardinality(_)
-    )
-}
-
-/// The types between which a cast exists.
-fn numeric(t: &Type) -> bool {
-    arithmetic(t) || matches!(t, Type::F32 | Type::F64)
 }
 
 /// A value of `got` is a value of `want`: the same type, or T where

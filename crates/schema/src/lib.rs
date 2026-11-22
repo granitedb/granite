@@ -322,7 +322,7 @@ fn unique<'a>(names: impl Iterator<Item = &'a String>) -> Result<(), (Error, usi
 
 /// The most bytes a value of `ty` takes in a row: its storage width, or a
 /// slot plus `max` heap bytes for String and Bytes.
-fn column_size_max(ty: &Type) -> u64 {
+pub fn column_size_max(ty: &Type) -> u64 {
     match ty {
         Type::Nullable(inner) => 1 + column_size_max(inner),
         Type::LowCardinality(inner) => column_size_max(inner),

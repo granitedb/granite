@@ -6,28 +6,9 @@
 use crate::{BinOp, Error, Expr, IR_VERSION, Param, Program, Scan, Stmt};
 use granite_base::constants::FORMAT;
 use granite_schema::{decode_type, encode_type};
-use granite_types::storage::{decode_fixed, encode_fixed};
+use granite_types::expr::{LiteralError, decode_literal, encode_literal, opcode};
 use granite_types::{Type, Value};
 use std::ops::Bound;
-
-/// The binary operators by opcode, from [`BINARY`].
-const BINOPS: [BinOp; 13] = [
-    BinOp::Add,
-    BinOp::Sub,
-    BinOp::Mul,
-    BinOp::Div,
-    BinOp::Rem,
-    BinOp::Eq,
-    BinOp::Ne,
-    BinOp::Lt,
-    BinOp::Le,
-    BinOp::Gt,
-    BinOp::Ge,
-    BinOp::And,
-    BinOp::Or,
-];
-/// Opcode of the first binary operator.
-const BINARY: u8 = 12;
 
 /// Counts one more node at `depth`, failing past the limits.
 fn enter(nodes: &mut u32, depth: u32) -> Result<(), Error> {
@@ -219,7 +200,7 @@ impl Writer {
         match e {
             Expr::Literal(literal) => {
                 let (ty, value) = &**literal;
-                self.out.push(0);
+                self.out.push(opcode::LITERAL);
                 self.ty(ty)?;
                 self.value(ty, value)
             }
@@ -249,14 +230,14 @@ impl Writer {
             }
             Expr::Neg(a) | Expr::Not(a) | Expr::IsNull(a) => {
                 self.out.push(match e {
-                    Expr::Neg(_) => 6,
-                    Expr::Not(_) => 7,
-                    _ => 8,
+                    Expr::Neg(_) => opcode::NEG,
+                    Expr::Not(_) => opcode::NOT,
+                    _ => opcode::IS_NULL,
                 });
                 self.expr(a, d)
             }
             Expr::UnwrapOr(a, b) => {
-                self.out.push(9);
+                self.out.push(opcode::UNWRAP_OR);
                 self.expr(a, d)?;
                 self.expr(b, d)
             }
@@ -271,17 +252,12 @@ impl Writer {
                 self.expr(present, d)
             }
             Expr::Cast(a, ty) => {
-                self.out.push(11);
+                self.out.push(opcode::CAST);
                 self.expr(a, d)?;
                 self.ty(ty)
             }
             Expr::Binary(op, a, b) => {
-                let i = BINOPS
-                    .iter()
-                    .position(|o| o == op)
-                    .expect("every operator is listed");
-                self.out
-                    .push(BINARY + u8::try_from(i).expect("13 operators"));
+                self.out.push(op.opcode());
                 self.expr(a, d)?;
                 self.expr(b, d)
             }
@@ -289,31 +265,7 @@ impl Writer {
     }
 
     fn value(&mut self, ty: &Type, value: &Value) -> Result<(), Error> {
-        ty.check(value).map_err(|_| Error::InvalidLiteral)?;
-        if ty.fixed_width().is_some() {
-            return encode_fixed(ty, value, &mut self.out).map_err(|_| Error::InvalidLiteral);
-        }
-        match (ty, value) {
-            (Type::LowCardinality(inner), v) => self.value(inner, v),
-            (Type::Nullable(_), Value::Null) => {
-                self.out.push(0);
-                Ok(())
-            }
-            (Type::Nullable(inner), v) => {
-                self.out.push(1);
-                self.value(inner, v)
-            }
-            (_, Value::String(s)) => self.bytes(s.as_bytes()),
-            (_, Value::Bytes(b)) => self.bytes(b),
-            _ => unreachable!("check() matched the value to its variable-length type"),
-        }
-    }
-
-    fn bytes(&mut self, b: &[u8]) -> Result<(), Error> {
-        let len = u32::try_from(b.len()).map_err(|_| Error::InvalidLiteral)?;
-        self.out.extend(len.to_le_bytes());
-        self.out.extend(b);
-        Ok(())
+        encode_literal(ty, value, &mut self.out).map_err(|_| Error::InvalidLiteral)
     }
 }
 
@@ -442,7 +394,7 @@ impl<'a> Reader<'a> {
         enter(&mut self.nodes, depth)?;
         let d = depth + 1;
         Ok(match self.u8()? {
-            0 => {
+            opcode::LITERAL => {
                 let ty = self.ty()?;
                 let value = self.value(&ty)?;
                 Expr::Literal(Box::new((ty, value)))
@@ -455,52 +407,31 @@ impl<'a> Reader<'a> {
                 key: self.exprs(d)?,
             },
             5 => Expr::CommitTs,
-            6 => Expr::Neg(self.boxed(d)?),
-            7 => Expr::Not(self.boxed(d)?),
-            8 => Expr::IsNull(self.boxed(d)?),
-            9 => Expr::UnwrapOr(self.boxed(d)?, self.boxed(d)?),
+            opcode::NEG => Expr::Neg(self.boxed(d)?),
+            opcode::NOT => Expr::Not(self.boxed(d)?),
+            opcode::IS_NULL => Expr::IsNull(self.boxed(d)?),
+            opcode::UNWRAP_OR => Expr::UnwrapOr(self.boxed(d)?, self.boxed(d)?),
             10 => Expr::Match {
                 value: self.boxed(d)?,
                 if_null: self.boxed(d)?,
                 present: self.boxed(d)?,
             },
-            11 => Expr::Cast(self.boxed(d)?, self.ty()?),
-            op => match op
-                .checked_sub(BINARY)
-                .and_then(|i| BINOPS.get(usize::from(i)))
-            {
-                Some(op) => Expr::Binary(*op, self.boxed(d)?, self.boxed(d)?),
+            opcode::CAST => Expr::Cast(self.boxed(d)?, self.ty()?),
+            op => match BinOp::from_opcode(op) {
+                Some(op) => Expr::Binary(op, self.boxed(d)?, self.boxed(d)?),
                 None => return Err(Error::UnknownOpcode),
             },
         })
     }
 
-    /// A literal's value: the storage representation of a fixed-width type;
-    /// otherwise a Nullable flag, or a u32 length and the bytes.
+    /// A literal's value (document 03 section 5.1).
     fn value(&mut self, ty: &Type) -> Result<Value, Error> {
-        let invalid = |_| Error::InvalidLiteral;
-        let value = match (ty.fixed_width(), ty) {
-            (Some(width), _) => {
-                let width = usize::try_from(width).expect("u32 fits usize");
-                decode_fixed(ty, self.slice(width)?).map_err(invalid)?
-            }
-            (None, Type::LowCardinality(inner)) => self.value(inner)?,
-            (None, Type::Nullable(inner)) => match self.u8()? {
-                0 => Value::Null,
-                1 => self.value(inner)?,
-                _ => return Err(Error::InvalidLiteral),
-            },
-            (None, Type::String { .. }) => Value::String(
-                String::from_utf8(self.bytes()?.to_vec()).map_err(|_| Error::InvalidLiteral)?,
-            ),
-            (None, _) => Value::Bytes(self.bytes()?.to_vec()),
-        };
-        ty.check(&value).map_err(invalid)?;
+        let rest = self.bytes.get(self.pos..).unwrap_or_default();
+        let (value, len) = decode_literal(ty, rest).map_err(|e| match e {
+            LiteralError::Truncated => Error::Malformed,
+            LiteralError::Invalid => Error::InvalidLiteral,
+        })?;
+        self.slice(len)?;
         Ok(value)
-    }
-
-    fn bytes(&mut self) -> Result<&'a [u8], Error> {
-        let len = u32::from_le_bytes(self.take()?);
-        self.slice(usize::try_from(len).map_err(|_| Error::Malformed)?)
     }
 }

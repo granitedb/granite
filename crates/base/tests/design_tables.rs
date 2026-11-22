@@ -461,6 +461,11 @@ fn phrases() -> Vec<Phrase> {
             D05,
             format!("column batches of up to {} rows", P.batch_rows_max),
         ),
+        (
+            &["fragment_memory_max"],
+            D05,
+            format!("fragment memory limit of {}", bytes(P.fragment_memory_max)),
+        ),
     ]
 }
 

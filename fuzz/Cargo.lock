@@ -54,10 +54,18 @@ name = "granite-base"
 version = "0.0.0"
 
 [[package]]
+name = "granite-columnar"
+version = "0.0.0"
+dependencies = [
+ "granite-lsm",
+]
+
+[[package]]
 name = "granite-fuzz"
 version = "0.0.0"
 dependencies = [
  "granite-base",
+ "granite-query",
  "granite-schema",
  "granite-schemac",
  "granite-txn",
@@ -78,6 +86,16 @@ name = "granite-lsm"
 version = "0.0.0"
 dependencies = [
  "granite-storage",
+]
+
+[[package]]
+name = "granite-query"
+version = "0.0.0"
+dependencies = [
+ "granite-base",
+ "granite-columnar",
+ "granite-schema",
+ "granite-types",
 ]
 
 [[package]]

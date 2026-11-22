@@ -95,7 +95,9 @@ dependencies = [
 name = "granite-query"
 version = "0.0.0"
 dependencies = [
+ "granite-base",
  "granite-columnar",
+ "granite-schema",
  "granite-types",
 ]
 

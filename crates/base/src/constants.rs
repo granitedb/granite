@@ -172,6 +172,9 @@ limits! {
     clock_guard_ms: 100,
     /// Rows in one column batch of query execution. Document 05 section 4.
     batch_rows_max: 4096,
+    /// Memory bound above which a scan fragment is rejected. Document 05
+    /// section 4.
+    fragment_memory_max: 512 * MIB,
 }
 
 const _: () = FORMAT.validate();
@@ -321,6 +324,10 @@ impl ProcessConfig {
                 + c.client_retry_timeout_ms
                 <= c.failover_budget_ms,
             "failover steps fit in the failover budget"
+        );
+        assert!(
+            c.batch_rows_max * FORMAT.row_size_max <= c.fragment_memory_max / 2,
+            "a batch of the widest rows fits in half a fragment's memory"
         );
         assert!(
             c.task_slice_max_ms <= c.loop_iteration_p999_max_ms,

@@ -366,3 +366,26 @@ fn codes_match_the_design_document() {
         assert_eq!(snake(h.operation().unwrap()), name);
     }
 }
+
+/// Writes sealed messages, one per command and operation and with bodies of
+/// several lengths, as the seed corpus of the `header_decode` fuzz target.
+#[test]
+#[ignore = "run by hand to reseed the fuzz corpus"]
+fn write_fuzz_seeds() {
+    let dir =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fuzz/corpus/header_decode");
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut rng = Rng(1);
+    for i in 0..22u8 {
+        let body = rng.bytes([0, 1, 17, 300][usize::from(i % 4)]);
+        let mut h = valid(&mut rng, &body);
+        h.command = i + 1;
+        h.operation = i % 9;
+        h.seal(&body);
+        std::fs::write(
+            dir.join(format!("seed-{i:02}")),
+            [h.as_bytes(), &body].concat(),
+        )
+        .unwrap();
+    }
+}

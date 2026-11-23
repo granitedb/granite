@@ -67,6 +67,22 @@ doc:
 roadmap-plan:
     python3 tools/roadmap_issues.py plan
 
+# Run the simulator's fixed seeds, crates/sim/ci-seeds.txt, as CI does.
+sim:
+    cargo run --profile sim --locked -p granite-sim --bin sim -- --list crates/sim/ci-seeds.txt
+
+# Run COUNT simulator seeds from FIRST, for example `just sim-range 10000 10000`.
+sim-range first count:
+    cargo run --profile sim --locked -p granite-sim --bin sim -- --range {{ first }} {{ count }}
+
+# Run random simulator seeds for SECONDS.
+sim-random seconds:
+    cargo run --profile sim --locked -p granite-sim --bin sim -- --random {{ seconds }}
+
+# Run one simulator seed and print every event of it.
+sim-trace seed:
+    cargo run --profile sim --locked -p granite-sim --bin sim -- --seed {{ seed }} --trace
+
 # Model-check one protocol model under models/ with TLC, for example `just model vsr` (models/README.md).
 model name:
     tools/model.sh {{ name }}

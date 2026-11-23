@@ -210,7 +210,7 @@ impl Node {
 }
 
 /// The operation a completion completes.
-fn op(completion: &Completion) -> Op {
+pub(crate) fn op(completion: &Completion) -> Op {
     match completion {
         Completion::Read { .. } => Op::Read,
         Completion::Write { .. } => Op::Write,

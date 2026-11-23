@@ -49,3 +49,8 @@ allow_attributes_without_reason = "deny"
 debug-assertions = true
 overflow-checks = true
 panic = "abort"
+
+# The seed runner catches a seed's panic, reports it and runs the other seeds (T0.4.5).
+[profile.sim]
+inherits = "release"
+panic = "unwind"

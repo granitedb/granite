@@ -12,4 +12,13 @@ publish = false
 [workspace]
 
 [dependencies]
+# The gateway's query engine (decision 0004). Only the SQL front end: file
+# formats, compression and the extra function families are left out.
+datafusion = { version = "=55.2.0", default-features = false, features = ["sql"] }
 granite-client = { path = "../clients/rust" }
+
+[dev-dependencies]
+# TableProvider is an async_trait; datafusion does not re-export the macro.
+async-trait = "=0.1.92"
+# DataFusion executes plans on a tokio runtime; both are already in its tree.
+tokio = { version = "=1.54.1", features = ["macros", "rt"] }

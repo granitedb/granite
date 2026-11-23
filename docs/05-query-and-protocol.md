@@ -288,7 +288,7 @@ The bound counts what the operators hold. Blocks read from parts go through the 
 ### SQL gateway
 
 - A separate, stateless service. Any number can run; they hold no data and can crash without consequence.
-- Built on an existing Rust query engine (Apache DataFusion is the candidate; confirm its state and pushdown interfaces at the start of phase 6). The database appears to it as a table provider that supports projection, filter, limit and partial-aggregate pushdown, and returns Arrow batches.
+- Built on Apache DataFusion, confirmed and pinned to one version by [decision 0004](decisions/0004-query-engine.md). The database appears to it as a table provider that returns Arrow batches. Projection, filter and limit reach the shards through DataFusion's table-provider interface; partial aggregates, which that interface does not carry, reach them through an optimizer rule of the gateway's own (decision 0004 also names the fallback).
 - Read-only. It accepts `SELECT` only and connects with a read-only credential. Writes stay on the typed protocol.
 - Every query runs at one snapshot timestamp across all shards (document 04 section 5).
 - It routes fragments to backups and scan workers first, and applies its own admission control, per-query memory limit and timeouts. A runaway ad hoc query can exhaust the gateway, not a shard.

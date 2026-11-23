@@ -55,6 +55,7 @@ Non-goals:
 | Retention | Per table: keep forever, archive after, or drop after. Keep-forever only until time segments exist | confirmed |
 | Time segments | Within the analytics phase (phase 6); drop and archive retention follow in phase 7 | confirmed |
 | Analytics | Ad hoc exploration through a separate, stateless, read-only SQL gateway; shards execute only bounded scan fragments | confirmed |
+| Gateway engine | Apache DataFusion, pinned version; projection, filter and limit through its table provider, partial aggregates through a gateway optimizer rule ([decision 0004](docs/decisions/0004-query-engine.md)) | confirmed |
 | Change feed | Built in phase 3; per-group ordered streams served from backups, merged across groups by timestamp from phase 5 | confirmed |
 | Clients | Rust, then Go, then Python | confirmed |
 | First benchmark | Ledger workload against TigerBeetle at the end of phase 3 | confirmed |

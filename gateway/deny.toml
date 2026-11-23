@@ -1,0 +1,67 @@
+# cargo-deny policy for the gateway's Cargo.lock: the root deny.toml plus the
+# exceptions DataFusion needs (decision 0004). The gateway's tree is checked
+# separately so that these exceptions never apply to the server or fuzz
+# workspaces. `just deny` runs it; keep the shared parts in step with the root.
+#
+# Injected bugs (T0.1.5, as in the root deny.toml), each must make `just deny`
+# fail; revert afterwards with `git checkout gateway/`. smallvec 1.6.0 no
+# longer resolves beside DataFusion, so the advisory case uses time 0.2.22:
+#   GPL licence:    cargo add --manifest-path gateway/Cargo.toml binstalk@=0.30.0
+#                   fails with: error[rejected]: failed to satisfy license requirements
+#   Known advisory: cargo add --manifest-path gateway/Cargo.toml time@=0.2.22
+#                   fails with: error[vulnerability] for RUSTSEC-2020-0071
+
+[graph]
+all-features = true
+
+[advisories]
+# Vulnerabilities, unmaintained and unsound crates fail by default. An entry
+# here needs the advisory id and the reason it does not affect Granite.
+ignore = [
+    { id = "RUSTSEC-2026-0543", reason = "chrono is unmaintained, no vulnerability; Arrow's date and time types are built on it; gateway only (decision 0004)" },
+    { id = "RUSTSEC-2026-0555", reason = "chrono-tz is unmaintained, no vulnerability; Arrow's time zone support; gateway only (decision 0004)" },
+    { id = "RUSTSEC-2026-0542", reason = "humantime is unmaintained because it wraps chrono, no vulnerability; used by DataFusion's configuration; gateway only (decision 0004)" },
+]
+
+[licenses]
+# Permissive licences compatible with shipping under Apache-2.0. Copyleft
+# licences (GPL, LGPL, AGPL, MPL, EPL) are not listed and so are rejected.
+allow = [
+    "0BSD",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "CC0-1.0",
+    "CDLA-Permissive-2.0",
+    "ISC",
+    "MIT",
+    "MIT-0",
+    # University of Illinois/NCSA, permissive: LLVM's libFuzzer, bundled by
+    # libfuzzer-sys in the fuzz targets only.
+    "NCSA",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "Zlib",
+]
+confidence-threshold = 0.93
+# The list holds the usual permissive licences, not only those in the tree today.
+unused-allowed-license = "allow"
+
+[bans]
+# DataFusion and Arrow pull in several versions of some crates (decision 0004).
+# "warn" keeps new duplicates visible without failing the check.
+multiple-versions = "warn"
+wildcards = "deny"
+# Path dependencies between our own unpublished crates carry no version.
+allow-wildcard-paths = true
+deny = [
+    { crate = "openssl", reason = "TLS uses rustls (docs/06 section 5)" },
+    { crate = "openssl-sys", reason = "TLS uses rustls (docs/06 section 5)" },
+]
+skip = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

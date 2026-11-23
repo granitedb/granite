@@ -47,11 +47,12 @@ lint:
 # Check the SQL gateway, which is built outside the workspace.
 gateway:
     cargo clippy --manifest-path gateway/Cargo.toml --all-targets --locked -- -D warnings
+    cargo test --manifest-path gateway/Cargo.toml --locked
 
 # Check dependency licences, advisories, bans and sources (deny.toml), for the workspace, the gateway and the fuzz targets.
 deny:
     cargo deny --locked check
-    cargo deny --locked --manifest-path gateway/Cargo.toml check
+    cargo deny --locked --manifest-path gateway/Cargo.toml --config gateway/deny.toml check
     cargo deny --locked --manifest-path fuzz/Cargo.toml check
 
 # Run the granite binary, for example `just run version`.

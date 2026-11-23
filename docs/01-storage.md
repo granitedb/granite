@@ -153,6 +153,16 @@ Differences from PAR:
 ### Grid
 
 - Blocks are addressed by a 64-bit index. A reference to a block is always (address, checksum). The checksum covers the block including its own address and type, so a misdirected write fails verification.
+- Block I/O (`granite_storage::grid`): address 0 names no block; block `a` lies at offset `(a - 1) x 128 KiB` of the grid zone. A block starts with a 32-byte header, little-endian, and its content fills the rest:
+
+  | Offset | Field |
+  |---|---|
+  | 0 | Checksum of bytes 16 to the end of the block, 128 bits |
+  | 16 | The block's own address, `u64` |
+  | 24 | Block type, `u8`: 1 manifest, 2 free set, 3 client session table |
+  | 25 | Zero, 7 bytes |
+
+  The layout is part of format version 2 (superblock); no file of that version held a block before it was defined. A write seals the header into the caller's buffer and writes the whole block from it. There is no read by address alone: a read takes the reference and the type it expects, reads the whole block into the caller's buffer with one device read, and checks it there, in this order, each failure its own typed error: the block matches its own checksum (bit rot, a torn write), that checksum is the reference's (a lost or misdirected write, a misdirected read), the address is the reference's, and the type is the expected one. The bytes reach the caller only after every check; a failed read reports the reference it expected, which is what repair from peers (T2.2.6) requests. The grid's table of operations in flight is sized when it is built; beyond it, or when the backend is full, a read or write is refused and handed back. A failed write stops the process (decision 0003). The grid does not fsync: a written block is durable only after a later fsync, which the checkpoint (section 7) issues before the superblock names the block.
 - Free set: a bitset of allocated blocks, persisted at checkpoint. Blocks released during a checkpoint interval become reusable only after the next checkpoint is durable, so a crash can always fall back to the previous checkpoint.
 - Block cache: set-associative, fixed size, per shard, keyed by address, validated by checksum.
 - Grid repair: on checksum failure the shard requests the block by (address, checksum) from peers. This works because storage is byte-identical across replicas of a group.

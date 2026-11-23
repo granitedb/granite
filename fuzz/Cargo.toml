@@ -18,6 +18,8 @@ granite-schema = { path = "../crates/schema" }
 granite-schemac = { path = "../crates/schemac" }
 granite-txn = { path = "../crates/txn" }
 granite-base = { path = "../crates/base" }
+granite-io = { path = "../crates/io" }
+granite-storage = { path = "../crates/storage" }
 granite-query = { path = "../crates/query" }
 granite-protocol = { path = "../crates/protocol" }
 granite-types = { path = "../crates/types" }
@@ -85,6 +87,13 @@ bench = false
 [[bin]]
 name = "row_batch"
 path = "fuzz_targets/row_batch.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "grid_read"
+path = "fuzz_targets/grid_read.rs"
 test = false
 doc = false
 bench = false

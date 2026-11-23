@@ -3,3 +3,4 @@
 pub mod growth;
 pub mod layout;
 pub mod superblock;
+pub mod wal;

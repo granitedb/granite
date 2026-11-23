@@ -414,6 +414,8 @@ fn every_corruption_is_rejected_or_readable() {
 // The golden batch: two rows of the exchange schema's `entry` table.
 
 /// The columns of `entry` in `schemas/exchange.schema`, in declaration order.
+/// Written out because this crate may not depend on the schema compiler;
+/// `crates/sim/tests/exchange_entry_batch.rs` checks them against the schema.
 fn entry() -> Vec<Type> {
     vec![
         Type::Id128,            // id

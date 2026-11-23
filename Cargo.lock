@@ -142,6 +142,7 @@ dependencies = [
  "granite-protocol",
  "granite-query",
  "granite-schema",
+ "granite-schemac",
  "granite-shard",
  "granite-storage",
  "granite-txn",

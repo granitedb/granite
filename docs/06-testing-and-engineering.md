@@ -83,6 +83,8 @@ The state machine itself takes no `Io`: it is a pure function of (state, op), wh
 
 The storage bound (`granite_sim::storage`) counts a unit of redundancy as corrupt on a replica when a bit flip, a lost write or a misdirected write left content there that its process did not write. A unit is a grid block, a WAL slot (its header and its prepare together) or the superblock (all its copies, since a replica needs a quorum of its own copies to open), at the same offsets on every replica. No fault may make a unit corrupt on a replication quorum of its group. Torn writes are not counted, since a write in flight was never acknowledged and recovery truncates it, and neither are read errors and misdirected reads, which change no stored content.
 
+The simulated network (`granite_sim::network`) delays each message by a latency model (one of them matching the single data center of document 02: 25 to 250 µs one way) and draws at most one message fault per message: reset, drop, delay, duplicate or reorder. Partitions, symmetric or asymmetric, start and heal on the driver's ticks. With faults enabled a connection no longer carries each message once and in order, so protocols do not rely on it. A simulated node (`granite_sim::Node`) joins a simulated disk and network into an `Io`, and passes the conformance suite with faults disabled.
+
 ### Checkers
 
 - **Storage convergence:** at every checkpoint, all replicas of a group that reached it have byte-identical grids and superblock roots.

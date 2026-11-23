@@ -22,6 +22,7 @@ just model vsr
 | Model | Protocol | Task |
 |---|---|---|
 | [standby-site](standby-site/README.md) | Asynchronous standby site: log shipping, apply timestamp Ta, promotion and epoch fencing (document 04 section 7) | T7.4.1 |
+| [reconfigure](reconfigure/README.md) | Changing a group's members: the reconfigure op, the switch at the next checkpoint boundary, state sync of new members, view changes and crashes around it (document 02 section 9) | T7.1.1 |
 | [selftest](selftest/Counter.tla) | None: a counter with one passing run and one defect for each kind of counterexample, so the runner's verdicts are checked on every run of the nightly job | the runner |
 | [vsr](vsr/README.md) | Normal operation and view change with storage faults (document 02) | T2.1.2 |
 | [xshard](xshard/README.md) | Cross-shard transactions: independent and coordinated, timestamp-order execution with the bypass, conflict vote, view changes (document 04 section 4) | T5.1.2 |

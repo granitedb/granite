@@ -28,6 +28,12 @@ Encryption at rest is delegated to the operating system or volume (LUKS, encrypt
 
 Client sessions and their last replies live in an internal LSM tree, not a dedicated zone.
 
+The zones follow each other in the order of the table, with no gap, so the grid starts at a fixed offset and the file ends where the grid ends. `granite_storage::layout::zones` is the one function that computes every offset and size; the backends take their zone sizes from it, a compile-time assertion keeps every zone sector-aligned, and a test compares it with this table.
+
+`granite format --cluster <id> --group <id> --replica <index> <path>` creates the data file. It refuses, changing nothing, if anything exists at the path. It writes the superblock zone (every copy holding the initial record below) and zeros over both WAL zones, so their space is allocated at format time and a later WAL write cannot fail for lack of room, then makes the file and its directory entry durable. The grid starts empty and gets its first step when the first block is needed.
+
+The grid size is a whole number of growth steps, and so is the limit. When the free set runs low the grid grows by exactly one step; at the limit it cannot, and the write that needed a block gets `no_space`. The storage crate names neither the clock nor the file system's free space (`tools/lint.py`), so growth cannot depend on them.
+
 Initial constants, to be tuned by benchmark in phase 1. They are format constants: stored in the superblock, and a data file whose stored values differ from the binary's is refused. Their home is `crates/base/src/constants.rs`; a test compares this table with it.
 
 | Constant | Value |
@@ -51,6 +57,21 @@ The checkpoint interval is a multiple of the compaction interval, so a checkpoin
 ### Superblock
 
 Holds: cluster id, group id, replica index, format version, VSR state (view, log view, the headers of the log installed with log view (document 02 section 4), commit op, checkpoint op), checkpoint references (manifest root block, free-set blocks, client-session table block), each with address and checksum. Written as 4 copies in sequence, each with its own checksum and a sequence number. On open, the highest sequence number with a valid quorum of copies wins. A superblock update is the atomic commit point of a checkpoint.
+
+Format version 1, the record `granite format` writes, holds the identity and the format constants. VSR state, checkpoint references and the sequence number come with the superblock update logic. Each copy is 64 KiB, little-endian:
+
+| Offset | Field |
+|---|---|
+| 0 | Checksum of bytes 16 to the end of the copy, 128 bits |
+| 16 | Cluster id, `u128` |
+| 32 | Format version, `u32` |
+| 36 | Group id, `u32` |
+| 40 | Replica index, `u8` |
+| 41 | Zero, 7 bytes |
+| 48 | The format constants (`granite_base::constants::FORMAT`), each a `u64`, in declaration order |
+| after them | Zero, to the end of the copy |
+
+Opening checks, in this order, each failure with its own typed error: a copy with a valid checksum exists, the version is the binary's (a file with a higher or lower version is refused, since the version decides how the rest is laid out), every format constant matches the binary's, the zero bytes are zero, and the cluster id, group id and replica index are the ones the replica was started with.
 
 ### WAL
 

@@ -40,8 +40,11 @@
 //! [`Network`] that a connection carries every message once and in order: the
 //! protocols above it must not rely on it (document 02).
 //!
-//! Process crashes are T0.4.4: dropping a [`Nic`] does not yet take it off
-//! the fabric, so its peers see no reset.
+//! A process crash ([`Nic::crash`]) resets every connection of its node, as
+//! if each were closed, except that the messages the node sent and those
+//! sent to it that have not arrived are dropped, and nothing it posted ever
+//! completes. Connects from other nodes wait for the restarted process to
+//! accept them.
 //!
 //! Every injected fault is recorded in a log that the driver drains with
 //! [`Fabric::faults`]. The log holds `log_capacity` entries; a full log stops
@@ -614,6 +617,26 @@ impl State {
         }
     }
 
+    /// The process on `peer` crashes; see [`Nic::crash`].
+    fn crash(&mut self, peer: Peer) {
+        while let Some((&id, end)) = self.ends.iter().find(|(_, end)| end.owner == peer) {
+            let remote = end.remote;
+            // The remote end fails what it posted; the messages in its inbox
+            // came from `peer` and go back to it, where they are dropped below.
+            self.fail(remote, NetworkError::Reset, NetworkError::Reset);
+            // What was sent to `peer` goes back to its senders, failed.
+            self.fail(id, NetworkError::Reset, NetworkError::Reset);
+            self.ends.remove(&id);
+        }
+        for mailbox in self.nodes.values_mut() {
+            mailbox.connects.retain(|&(from, _)| from != peer);
+        }
+        let mailbox = self.nodes.get_mut(&peer).expect("node is on the fabric");
+        mailbox.ready.clear();
+        mailbox.accepts.clear();
+        mailbox.connections = 0;
+    }
+
     /// The owner closes the end `id`: what is posted on it fails with
     /// `Closed`, what waits in its inbox goes back with `Reset`, and the
     /// remote end is reset.
@@ -696,6 +719,34 @@ impl Nic {
         let (_, completion) = ready.swap_remove(index);
         self.in_flight -= 1;
         Some(completion)
+    }
+
+    /// The process on this node crashes: every connection of the node is
+    /// reset, its peers' posted receives on them fail, messages sent to it
+    /// go back to their senders failed, messages it sent that have not
+    /// arrived are dropped, and nothing it submitted completes. The node
+    /// stays on the fabric under the same peer, for the restarted process.
+    pub fn crash(&mut self) {
+        self.fabric.0.borrow_mut().crash(self.peer);
+        self.in_flight = 0;
+    }
+
+    /// The earliest virtual time at which this node's [`Nic::poll`] may
+    /// return a completion, for the driver to schedule a poll.
+    pub fn ready_at(&self) -> Option<u64> {
+        let state = self.fabric.0.borrow();
+        let ready = state.nodes[&self.peer].ready.iter().map(|r| r.0);
+        // An arrival on another node's end completes there, but its sender
+        // learns of it through this node's mailbox only once it happens.
+        let arrivals = state
+            .ends
+            .values()
+            .filter(|end| !end.posted.is_empty())
+            .filter_map(|end| {
+                let packet = end.inbox.front()?;
+                (end.owner == self.peer || packet.from == self.peer).then_some(packet.arrival)
+            });
+        ready.chain(arrivals).min()
     }
 
     fn admit(&mut self) -> bool {

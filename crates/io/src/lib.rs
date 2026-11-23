@@ -2,6 +2,7 @@
 
 pub mod conformance;
 pub mod event_loop;
+pub mod file;
 pub mod histogram;
 pub mod memory;
 pub mod message_pool;

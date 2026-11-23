@@ -5,8 +5,9 @@ The rules and their reasons are in docs/coding-rules.md. Clippy enforces the
 bans listed in clippy.toml; this script runs it twice so that tests and
 test-only modules are exempt from them, then checks what clippy cannot: where
 `unsafe` may appear, `usize`/`isize` in `#[repr(C)]` layouts, dependencies
-on random-number crates, and unchecked arithmetic and `as` casts in the crates
-that compute replicated state.
+on random-number crates, unchecked arithmetic and `as` casts in the crates
+that compute replicated state, and names of the clock or the file system's
+free space in the storage crate.
 
 Before linting the workspace it lints every file in tools/lint-fixtures/ as
 if it sat at a given path in the repository, and fails unless each banned
@@ -49,6 +50,11 @@ UNCHECKED = re.compile(r"\b(?:(?:wrapping|saturating|unchecked|overflowing)_\w+|
 TEST_MODULE = re.compile(r"#\[cfg\(test\)\]\s*(?:pub(?:\([^)]*\))?\s+)?mod\s+\w+\s*\{")
 # Clippy knows the types, so it finds every `as` cast, through type aliases too.
 AS_PASS = ["--lib", "--bins", "--locked", "--no-deps", "--", "-D", "warnings", "-D", "clippy::as_conversions"]
+
+# The storage crate decides when the grid grows, which must depend only on the ops applied
+# (docs/01 section 2): it names neither the clock nor the file system's free space.
+STORAGE_CRATE = "crates/storage/src/"
+GROWTH_INPUTS = re.compile(r"\b(?:Time|monotonic|realtime|f?statv?fs)\b")
 
 BANS = ["clippy::disallowed_methods", "clippy::disallowed_types", "clippy::disallowed_macros"]
 CLIPPY_PASSES = [
@@ -112,6 +118,12 @@ FIXTURE_CASES = [
     ("unchecked_arithmetic.rs", "crates/storage/src/lib.rs", []),
     ("unchecked_arithmetic.rs", "crates/types/tests/arith.rs", []),
     ("checked_arithmetic.rs", "crates/types/src/lib.rs", []),
+    ("growth_inputs.rs", "crates/storage/src/growth.rs", [
+        f"crates/storage/src/growth.rs:{line}: `{name}` in the storage crate" for line, name in [
+            (5, "Time"), (6, "monotonic"), (9, "statvfs"), (13, "Time"), (14, "monotonic"), (14, "statvfs"),
+        ]
+    ]),
+    ("growth_inputs.rs", "crates/vsr/src/lib.rs", []),
     ("io_accepted.rs", "crates/io/src/lib.rs", []),
     ("rand.toml", "crates/io/Cargo.toml", []),
 ]
@@ -155,6 +167,9 @@ def source_violations(path, text):
     code, errors = code_only(text), []
     if path.startswith(CHECKED_CRATES):
         errors += unchecked_arithmetic(path, code)
+    if path.startswith(STORAGE_CRATE):
+        errors += [f"{path}:{line_of(code, m.start())}: `{m.group(0)}` in the storage crate, whose grid growth "
+                   "depends only on the ops applied (docs/01 section 2)" for m in GROWTH_INPUTS.finditer(code)]
     if path not in UNSAFE_MODULES:
         errors += [f"{path}:{line_of(code, m.start())}: unsafe outside the modules listed in tools/lint.py"
                    for m in re.finditer(r"\bunsafe\b", code)]

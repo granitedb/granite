@@ -85,6 +85,8 @@ The storage bound (`granite_sim::storage`) counts a unit of redundancy as corrup
 
 The simulated network (`granite_sim::network`) delays each message by a latency model (one of them matching the single data center of document 02: 25 to 250 µs one way) and draws at most one message fault per message: reset, drop, delay, duplicate or reorder. Partitions, symmetric or asymmetric, start and heal on the driver's ticks. With faults enabled a connection no longer carries each message once and in order, so protocols do not rely on it. A simulated node (`granite_sim::Node`) joins a simulated disk and network into an `Io`, and passes the conformance suite with faults disabled.
 
+The process faults live in the simulated node (`granite_sim::node`). A crash is drawn from the seed at every I/O boundary: after a submission is taken, or after a completion is taken from the device and before the process sees it. It tears the disk's writes in flight, resets the node's connections, drops the messages it sent that have not arrived and returns those sent to it to their senders, failed. The node then swallows every call until the driver drops the process, with its memory, and starts a new one from what the disk holds. A pause holds the next completion and resumes the process later with its memory intact; a slow shard takes one completion per configured interval. Each boundary is counted by call site, so a run shows where crashes landed. A toy replicated counter (`granite_sim::counter`) proves this machinery under every storage, network and process fault.
+
 ### Checkers
 
 - **Storage convergence:** at every checkpoint, all replicas of a group that reached it have byte-identical grids and superblock roots.

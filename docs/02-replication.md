@@ -127,7 +127,14 @@ Revised for hundreds to thousands of client processes.
 ## 9. Standbys and reconfiguration
 
 - **Standby:** receives prepares, never votes, can be promoted. Cheap to implement; planned with the first replicated release.
-- **Replica replacement:** a logged `reconfigure` op names the new member set and takes effect at a defined future op (the next checkpoint boundary). The old configuration commits the op; the new configuration takes over at the boundary; a new member must have reached that checkpoint by state sync before it counts toward quorums. This is the VR Revisited epoch mechanism adapted to checkpoints. It is the least-proven part of this document and gets a model-checked specification before any code (roadmap epic E7.1).
+- **Reconfiguration** (replacing, adding or removing replicas), checked by the model of T7.1.1 (`models/reconfigure`):
+  1. A logged `reconfigure` op at op k names the new member set, in primary order. It takes effect at the next checkpoint boundary after k, op B. Every replica derives B from k alone, so the change takes effect at the same op on every replica.
+  2. The old configuration commits the op and every op up to B, with its own quorums, and never prepares an op after B. Its view changes go on as before, before and after B.
+  3. Each configuration is an epoch. Views are ordered by (epoch, view), every message carries its epoch, and a replica takes messages of its own epoch only. The new configuration starts at view 0 of epoch e + 1, whose primary is the first member of the new set (as VR Revisited §7.1.1; reusing the old view numbers could give two primaries of one view, §8.3). Its primary, quorums and nack quorum are those of section 1 for the new member count.
+  4. A member of the new configuration enters epoch e + 1 once it knows op B is committed and holds the checkpoint at B: a new member by state sync (section 5), a member of both configurations from its own log or by repair. Only then does it vote, acknowledge or lead in epoch e + 1. Everything up to B is committed, so view 0 of the new epoch starts from the checkpoint with no view change, and the new configuration commits only ops after B.
+  5. A removed replica stays in epoch e. Nothing it sends is taken by the new configuration, and its configuration can commit nothing after B, so it cannot disturb the group while it keeps running; it is shut down once B is committed.
+
+  Without step 4, a new member that leads the first view of the new epoch starts it without the committed ops; without the stop at B in step 2, both configurations commit an op after B; with B taken differently on different replicas, a new primary starts without a committed op. The model shows each of these (its injected defects). The old configuration keeps taking requests until B, unlike VR Revisited §7.1, where it stops at the reconfigure op, because new members are synced beforehand (02a, D4).
 
 ## 10. Upgrades
 

@@ -34,11 +34,13 @@ use std::collections::BTreeMap;
 use granite_base::checksum::checksum;
 use granite_base::constants::FORMAT;
 use granite_io::conformance::seal;
+use granite_io::memory::SplitMix64;
 use granite_io::message_pool::{Message, MessagePool, SECTOR_SIZE};
 use granite_io::{Completion, Connection, Io, Network, Peer, Random, Storage, Tag, Time, Zone};
 
 use crate::network::{self, Fabric, Latency, Nic};
 use crate::node::{self, Site, Visits};
+use crate::runner::{Event as LogEvent, Failure, Log, Scenario};
 use crate::storage::{self, Disk, Group};
 use crate::{Node, Scheduler};
 
@@ -121,6 +123,8 @@ pub struct Outcome {
 struct Checker {
     /// The largest value an operation returned.
     floor: u64,
+    /// The value the last operation returned.
+    last: u64,
     ops: u64,
     violation: Option<String>,
 }
@@ -128,6 +132,7 @@ struct Checker {
 impl Checker {
     fn done(&mut self, now: u64, value: u64, increment: bool) {
         self.ops += 1;
+        self.last = value;
         let ok = if increment {
             value > self.floor
         } else {
@@ -523,6 +528,9 @@ impl Client {
                 if let Some(r) = self.replica(Connection(split(tag).1)) {
                     self.sending[r] = false;
                 }
+                // The next tick resends: a send across a partition completes
+                // at once, and resending here would spin with the clock stopped.
+                return;
             }
             _ => panic!("the client only uses the network"),
         }
@@ -574,6 +582,11 @@ enum Event {
 /// Runs the counter from `seed` until the client has completed
 /// `config.ops` operations, a check fails, or virtual time runs out.
 pub fn run(seed: u64, config: &Config, pool: &MessagePool) -> Outcome {
+    run_logged(seed, config, pool, &mut Log::new(0))
+}
+
+/// [`run`], reporting completions, restarts, faults and operations to `log`.
+pub fn run_logged(seed: u64, config: &Config, pool: &MessagePool, log: &mut Log) -> Outcome {
     let mut sim = Scheduler::new(seed, 64);
     let group = Group::new(REPLICAS, QUORUM, ZONES);
     let alone = Group::new(1, 1, ZONES);
@@ -600,8 +613,9 @@ pub fn run(seed: u64, config: &Config, pool: &MessagePool) -> Outcome {
     sim.schedule(TICK, Event::Tick).expect("room");
     // A process that crashed is dropped, with its memory, and a new one
     // starts from what the disk holds; its start may crash too.
-    let settle = |i: usize, nodes: &mut [Node], processes: &mut [Process]| {
+    let settle = |i: usize, nodes: &mut [Node], processes: &mut [Process], log: &mut Log| {
         while nodes[i].down() {
+            log.push(nodes[i].monotonic(), LogEvent::Restart { node: i });
             nodes[i].restart();
             processes[i] = Process::start(i, &mut nodes[i], pool, config);
         }
@@ -621,22 +635,33 @@ pub fn run(seed: u64, config: &Config, pool: &MessagePool) -> Outcome {
                     // A crash at the completion leaves the node down, and
                     // may have failed operations of nodes already drained.
                     busy |= nodes[i].down();
-                    settle(i, &mut nodes, &mut processes);
+                    settle(i, &mut nodes, &mut processes, log);
                     let Some(completion) = completion else {
                         break;
                     };
                     busy = true;
+                    let op = node::op(&completion);
+                    log.push(now, LogEvent::Completion { node: i, op });
+                    let ops = checker.ops;
                     processes[i].complete(&mut nodes[i], pool, completion, &mut checker);
-                    settle(i, &mut nodes, &mut processes);
+                    if checker.ops > ops {
+                        log.push(now, LogEvent::Note("operation returned", checker.last));
+                    }
+                    settle(i, &mut nodes, &mut processes, log);
                 }
             }
         }
-        for node in &mut nodes {
-            outcome.storage_faults += node.disk.faults().count() as u64;
+        for (i, node) in nodes.iter_mut().enumerate() {
+            for fault in node.disk.faults() {
+                outcome.storage_faults += 1;
+                log.push(now, LogEvent::Storage { node: i, fault });
+            }
         }
         fabric.faults(&mut network_faults);
         outcome.network_faults += network_faults.len() as u64;
-        network_faults.clear();
+        for fault in network_faults.drain(..) {
+            log.push(now, LogEvent::Network(fault));
+        }
         let next = nodes.iter().filter_map(Node::ready_at).min();
         if let Some(at) = next {
             assert!(at > now, "every due completion was handed over");
@@ -651,7 +676,7 @@ pub fn run(seed: u64, config: &Config, pool: &MessagePool) -> Outcome {
                 for i in 0..NODES {
                     if nodes[i].running() {
                         processes[i].tick(&mut nodes[i], pool);
-                        settle(i, &mut nodes, &mut processes);
+                        settle(i, &mut nodes, &mut processes, log);
                     }
                 }
                 sim.schedule(sim.now() + TICK, Event::Tick).expect("room");
@@ -674,6 +699,87 @@ pub fn run(seed: u64, config: &Config, pool: &MessagePool) -> Outcome {
         }
     }
     outcome
+}
+
+/// Swarm testing (document 06 section 1): each seed turns each storage,
+/// network and process fault on or off, at the rates of the seed gate of
+/// T0.4.4, and picks how many operations the client runs. A function of the
+/// seed only, drawn from its own generator so that the run's is untouched.
+pub fn swarm(seed: u64) -> Config {
+    let mut random = SplitMix64(seed ^ 0x5357_4152_4d00_0000);
+    let mut on = |rate: u32| if random.next_u64() & 1 == 0 { 0 } else { rate };
+    let storage = storage::Faults {
+        torn_writes: on(1) == 1,
+        bit_flip: on(5_000),
+        misdirected_write: on(5_000),
+        lost_write: on(5_000),
+        misdirected_read: on(5_000),
+        read_error: on(50_000),
+        latency: on(100_000),
+        latency_max: MILLISECOND,
+    };
+    let network = network::Faults {
+        reset: on(2_000),
+        drop: on(20_000),
+        delay: on(20_000),
+        delay_max: 5 * MILLISECOND,
+        duplicate: on(20_000),
+        reorder: on(20_000),
+        symmetric_partition: on(2_000),
+        asymmetric_partition: on(2_000),
+        heal: 50_000,
+    };
+    let process = node::Faults {
+        crash: on(10_000),
+        pause: on(1_000),
+        pause_max: 20 * MILLISECOND,
+        slow: 0,
+    };
+    let mut process = [process; NODES];
+    let slow = u64::from(on(200_000));
+    process[(random.next_u64() % NODES as u64) as usize].slow = slow;
+    Config {
+        ops: 10 + random.next_u64() % 41,
+        storage,
+        network,
+        process,
+        skip_durable_write: false,
+    }
+}
+
+const CHECKER: &str = "counter: never goes back, never loses an acknowledged increment";
+
+fn check(seed: u64, config: &Config, log: &mut Log) -> Result<(), Failure> {
+    let pool = MessagePool::new(48);
+    match run_logged(seed, config, &pool, log).violation {
+        Some(message) => Err(Failure {
+            checker: CHECKER,
+            message,
+        }),
+        None => Ok(()),
+    }
+}
+
+/// The counter under its swarm configuration.
+pub const SCENARIO: Scenario = Scenario {
+    name: "counter",
+    swarm: |seed| format!("{:?}", swarm(seed)),
+    run: |seed, log| check(seed, &swarm(seed), log),
+};
+
+/// Injected bug: the counter whose replicas acknowledge a write before it is
+/// durable. Fails on some seeds; the runner's own failing scenario.
+pub const LOST_WRITE: Scenario = Scenario {
+    name: "counter-lost-write",
+    swarm: |seed| format!("{:?}", lost_write(seed)),
+    run: |seed, log| check(seed, &lost_write(seed), log),
+};
+
+fn lost_write(seed: u64) -> Config {
+    Config {
+        skip_durable_write: true,
+        ..swarm(seed)
+    }
 }
 
 #[cfg(test)]

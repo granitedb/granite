@@ -101,6 +101,8 @@ The reference model is a small, obviously correct in-memory implementation of th
 ### Operation
 
 - Every failing seed reproduces exactly; the seed and git commit are the bug report.
+- The seed runner (`granite_sim::runner` and the `sim` binary of `crates/sim`) runs one seed, a range, a seed list or random seeds for a duration of one scenario, in parallel across cores, each seed on one thread. For a failed seed it prints the commit, the failing checker and its message, the seed's swarm configuration, the last events of the run and one command that reruns that seed; adding `--trace` to the command prints every event of it. A panic or failed assertion is a failure (the runner builds in the `sim` profile, which unwinds), and so is a hang: a run that logs a million events at one virtual time. It exits non-zero if any seed failed. `just sim` runs the fixed list `crates/sim/ci-seeds.txt` on every pull request, `just sim-range FIRST COUNT` a range (the nightly workflow runs a new one each night), `just sim-random SECONDS` random seeds and `just sim-trace SEED` one seed with its trace.
+- A scenario is a name and two functions of the seed: its swarm configuration and its run, which reports events to the runner's log and returns the checker that failed. The toy counter is the first; `counter-lost-write` is the same with an injected bug, and the `fixture-*` scenarios fail on purpose to test the runner.
 - A fleet runs random seeds continuously against the main branch and reports failures. Budget for dedicated machines.
 - Swarm testing: each seed randomises which faults and which workload features are enabled.
 - Time compression: the virtual clock skips idle time, so hours of cluster time run in seconds.

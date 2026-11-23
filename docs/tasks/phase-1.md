@@ -14,16 +14,14 @@ Design reference for the whole phase: `docs/01-storage.md`.
 - Grid growth in fixed 1 GiB steps, triggered by the free set falling below a threshold, which depends only on the ops applied.
 - A per-group size limit; at the limit, writes are rejected with `no_space`.
 
-**Not in this card.** Superblock update logic (T1.1.2), the free set itself (T1.1.6).
+**Not in this card.** Superblock update logic (T1.1.2), the free set itself (T1.1.6). The growth trigger and extending the file's grid zone come with the free set's low-space threshold in T1.1.6, which takes the growth gates; `no_space` at the size limit with reopen and verify moves to T1.2.6, the first card with blocks, allocation and a checkpoint that records the grid.
 
 **Depends on.** T0.3.2, T0.1.4, T0.2.2.
 
 **Gates.**
 - [ ] The offset and size of every zone are computed by one function, asserted at compile time to be sector-aligned, and match the table in document 01.
 - [ ] `granite format` on an existing data file refuses and changes nothing (test comparing the file hash before and after).
-- [ ] Two instances fed the same 100,000 ops grow their grids at the same op number, for 100 random workloads.
-- [ ] Growth is never triggered by time, by file-system free space or by read load (lint plus a test that varies all three).
-- [ ] At the size limit, the next write that needs a block returns `no_space`; reads keep working; nothing is corrupted (test, then reopen and verify).
+- [ ] Growth is never triggered by time or by file-system free space: a lint rejects their names in the storage crate.
 - [ ] A file formatted for cluster A is refused when opened as cluster B, or with a different group id or replica index, each with its own typed error.
 - [ ] The format version is stored and a file with a higher version is refused.
 
@@ -129,7 +127,7 @@ Design reference for the whole phase: `docs/01-storage.md`.
 - Deterministic allocation: the same sequence of acquire and release calls gives the same addresses.
 - Blocks released during a checkpoint interval become reusable only after the next checkpoint is durable.
 - Reservations, so compaction can claim its worst-case blocks up front in a fixed order.
-- The low-space threshold that triggers grid growth.
+- The low-space threshold that triggers grid growth, and the growth itself: one step of `granite_storage::growth::GridSize`, extending the data file's grid zone through a resize in `crates/io` (from T1.1.1, which built the step and the limit).
 
 **Not in this card.** The checkpoint sequence (T1.2.6).
 
@@ -143,6 +141,8 @@ Design reference for the whole phase: `docs/01-storage.md`.
 - [ ] Encode then decode of the persisted form returns the same set for 10,000 random sets, including empty and full.
 - [ ] Acquire on a full set returns a typed "no space" result and never an invalid address.
 - [ ] Find-free on a 1 TiB grid at 90% occupancy takes under 1 microsecond on average on real hardware (report).
+- [ ] Two instances fed the same 100,000 ops grow their grids at the same op number, for 100 random workloads (from T1.1.1).
+- [ ] Growth is never triggered by time, by file-system free space or by read load: a test varies all three (from T1.1.1, which has the lint).
 
 ## T1.1.7 Block cache
 
@@ -306,6 +306,7 @@ Design reference for the whole phase: `docs/01-storage.md`.
 - [ ] Writing the superblock before the manifest blocks are durable, as a deliberate defect, fails within 1,000 seeds (injected bug).
 - [ ] Recovery time for a full WAL of 1 KiB-row prepares is measured on real hardware and recorded.
 - [ ] No checkpoint task slice exceeds 1 ms.
+- [ ] At the grid's size limit, the next write that needs a block returns `no_space`; reads keep working; nothing is corrupted (test, then reopen and verify) (from T1.1.1).
 
 ## T1.3.10 Relocatable parts: part-relative block references and extent map
 

@@ -22,6 +22,8 @@ mod callbacks;
 mod counting_alloc;
 mod futures;
 
+use granite_base::constants::FORMAT;
+use granite_io::conformance::seal;
 use granite_io::memory::{Hub, Memory, SplitMix64};
 use granite_io::message_pool::{Message, MessagePool, SECTOR_SIZE};
 use granite_io::{Completion, Connection, Io, Network, Peer};
@@ -32,8 +34,10 @@ pub const OPS: usize = 8;
 pub const POSTED: usize = 4;
 pub const PREPARE: u8 = 1;
 pub const ACK: u8 = 2;
-/// Length of a message: kind and op number.
-pub const LEN: u32 = 9;
+/// Where a message's body starts: after its header.
+const BODY: usize = FORMAT.header_size as usize;
+/// Length of a message: a header, then kind and op number.
+pub const LEN: u32 = BODY as u32 + 9;
 pub const SECTOR: u64 = SECTOR_SIZE as u64;
 const ZONES: [u64; 4] = [4 * SECTOR, 4 * SECTOR, OPS as u64 * SECTOR, 4 * SECTOR];
 /// Crash steps are drawn below this; a run has fewer deliveries, so some
@@ -98,15 +102,16 @@ fn connect(ios: &mut [Memory; NODES]) -> [Links; NODES] {
 
 pub fn encode(message: &mut Message, kind: u8, op: u64) {
     let bytes = message.bytes_mut().expect("only handle");
-    bytes[0] = kind;
-    bytes[1..9].copy_from_slice(&op.to_le_bytes());
+    bytes[BODY] = kind;
+    bytes[BODY + 1..BODY + 9].copy_from_slice(&op.to_le_bytes());
+    seal(bytes, LEN, op);
 }
 
 pub fn decode(message: &Message) -> (u8, u64) {
     let bytes = message.bytes();
     (
-        bytes[0],
-        u64::from_le_bytes(bytes[1..9].try_into().unwrap()),
+        bytes[BODY],
+        u64::from_le_bytes(bytes[BODY + 1..BODY + 9].try_into().unwrap()),
     )
 }
 

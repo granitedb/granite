@@ -1,8 +1,10 @@
 //! The in-memory backend passes the conformance suite, and its own checks of
 //! the trait preconditions hold.
 
+use granite_base::constants::FORMAT;
+use granite_io::conformance::seal;
 use granite_io::memory::{Hub, Memory};
-use granite_io::message_pool::{MESSAGE_SIZE, MessagePool, SECTOR_SIZE};
+use granite_io::message_pool::{MESSAGE_SIZE, Message, MessagePool, SECTOR_SIZE};
 use granite_io::{Completion, Connection, Io, Network, NetworkError, Peer, Storage, Zone};
 
 const ZONES: [u64; 4] = [
@@ -106,6 +108,26 @@ fn connect(a: &mut Memory, b: &mut Memory, to_a: Peer) -> (Connection, Connectio
     (near, far)
 }
 
+/// A header-only message, the shortest a connection carries.
+const HEADER: u32 = FORMAT.header_size as u32;
+
+fn framed(pool: &MessagePool) -> Message {
+    let mut message = pool.acquire().unwrap();
+    seal(message.bytes_mut().unwrap(), HEADER, 0);
+    message
+}
+
+/// The memory backend holds sends to the rule io_uring needs for framing,
+/// so code tested on it cannot send bytes a real connection would misframe.
+#[test]
+#[should_panic(expected = "a send is one whole message")]
+fn a_send_of_raw_bytes_is_refused() {
+    let [(mut a, to_a), (mut b, _)] = pair(0);
+    let pool = MessagePool::new(1);
+    let (near, _) = connect(&mut a, &mut b, to_a);
+    let _ = a.send(4, near, HEADER, pool.acquire().unwrap());
+}
+
 #[test]
 fn a_crashed_node_resets_its_connections_and_refuses_new_ones() {
     let [(mut a, to_a), (mut b, to_b)] = pair(0);
@@ -113,7 +135,7 @@ fn a_crashed_node_resets_its_connections_and_refuses_new_ones() {
     let (near, _) = connect(&mut a, &mut b, to_a);
     a.recv(3, near, pool.acquire().unwrap()).unwrap();
     drop(b);
-    a.send(4, near, 1, pool.acquire().unwrap()).unwrap();
+    a.send(4, near, HEADER, framed(&pool)).unwrap();
     a.connect(5, to_b).unwrap();
     let mut results: Vec<_> = drain(&mut a)
         .into_iter()
@@ -140,7 +162,7 @@ fn close_returns_the_sends_still_waiting() {
     let [(mut a, to_a), (mut b, _)] = pair(0);
     let pool = MessagePool::new(1);
     let (_, far) = connect(&mut a, &mut b, to_a);
-    b.send(3, far, 1, pool.acquire().unwrap()).unwrap();
+    b.send(3, far, HEADER, framed(&pool)).unwrap();
     assert!(drain(&mut b).is_empty(), "nobody posted a buffer");
     b.close(far);
     let completions = drain(&mut b);

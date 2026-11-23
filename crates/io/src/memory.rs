@@ -15,6 +15,7 @@ use crate::message_pool::{MESSAGE_SIZE, Message, SECTOR_SIZE};
 use crate::traits::{
     Completion, Connection, Full, Io, Network, NetworkError, Peer, Random, Storage, Tag, Time, Zone,
 };
+use granite_base::header::Header;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, VecDeque};
 use std::rc::Rc;
@@ -467,7 +468,10 @@ impl Network for Memory {
         len: u32,
         buffer: Message,
     ) -> Result<(), Full<Message>> {
-        assert!(len > 0 && len as usize <= MESSAGE_SIZE);
+        assert!(
+            Header::decode(buffer.bytes()).is_ok_and(|h| h.size.get() == len),
+            "a send is one whole message"
+        );
         if !self.admit() {
             return Err(Full(buffer));
         }

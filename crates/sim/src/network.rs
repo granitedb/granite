@@ -52,8 +52,9 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
+use granite_base::header::Header;
 use granite_io::memory::SplitMix64;
-use granite_io::message_pool::{MESSAGE_SIZE, Message};
+use granite_io::message_pool::Message;
 use granite_io::{Completion, Connection, Full, Network, NetworkError, Peer, Random, Tag, Time};
 
 use crate::storage::MILLION;
@@ -746,7 +747,10 @@ impl Network for Nic {
         len: u32,
         buffer: Message,
     ) -> Result<(), Full<Message>> {
-        assert!(len > 0 && len as usize <= MESSAGE_SIZE);
+        assert!(
+            Header::decode(buffer.bytes()).is_ok_and(|h| h.size.get() == len),
+            "a send is one whole message"
+        );
         if !self.admit() {
             return Err(Full(buffer));
         }

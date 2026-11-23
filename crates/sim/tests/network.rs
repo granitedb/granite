@@ -11,6 +11,7 @@
 //! fault goes through the scheduler, so it is in the trace.
 
 use granite_base::constants::FORMAT;
+use granite_io::conformance::seal;
 use granite_io::message_pool::{MessagePool, SECTOR_SIZE};
 use granite_io::{Completion, Connection, Network, NetworkError, Peer, Tag, Time};
 use granite_sim::network::{Fabric, Fault, FaultKind, Faults, Latency, Nic};
@@ -23,8 +24,10 @@ const WINDOW: u32 = 8;
 /// A window of sends, one of receives and an accept or connect.
 const CAPACITY: u32 = 2 * WINDOW + 1;
 const LOG: usize = 1_000;
-/// A message: its number and the virtual time it was sent.
-const LEN: u32 = 16;
+/// Where a message's body starts: after its header.
+const BODY: usize = FORMAT.header_size as usize;
+/// A message: a header, then its number and the virtual time it was sent.
+const LEN: u32 = BODY as u32 + 16;
 const SEND: Tag = 1;
 const OPEN: Tag = 2;
 /// A receive's tag is this plus the index of its post on the node.
@@ -235,8 +238,9 @@ impl Run<'_> {
                 while side.sending < WINDOW && side.next < self.per_link {
                     let mut buffer = self.pool.acquire().expect("pool has room");
                     let bytes = buffer.bytes_mut().expect("only handle");
-                    bytes[..8].copy_from_slice(&side.next.to_le_bytes());
-                    bytes[8..16].copy_from_slice(&now.to_le_bytes());
+                    bytes[BODY..BODY + 8].copy_from_slice(&side.next.to_le_bytes());
+                    bytes[BODY + 8..BODY + 16].copy_from_slice(&now.to_le_bytes());
+                    seal(bytes, LEN, side.next);
                     side.nic.send(SEND, connection, LEN, buffer).expect("room");
                     side.sending += 1;
                     side.next += 1;
@@ -281,8 +285,9 @@ impl Run<'_> {
                     Ok(len) => {
                         assert_eq!(len, LEN);
                         let bytes = buffer.bytes();
-                        let number = u64::from_le_bytes(bytes[..8].try_into().unwrap());
-                        let sent_at = u64::from_le_bytes(bytes[8..16].try_into().unwrap());
+                        let number = u64::from_le_bytes(bytes[BODY..BODY + 8].try_into().unwrap());
+                        let sent_at =
+                            u64::from_le_bytes(bytes[BODY + 8..BODY + 16].try_into().unwrap());
                         side.posts[(tag - RECV) as usize] = Some(number);
                         let stats = &mut side.stats;
                         stats.messages += 1;
@@ -542,4 +547,17 @@ fn node_passes_the_conformance_suite() {
         });
         granite_io::conformance::run(nodes);
     }
+}
+
+/// Sends are held to the rule io_uring needs for framing, so code tested in
+/// the simulator cannot send bytes a real connection would misframe.
+#[test]
+#[should_panic(expected = "a send is one whole message")]
+fn a_send_of_raw_bytes_is_refused() {
+    let mut sim = Scheduler::<()>::new(0, 1);
+    let fabric = Fabric::new(Faults::default(), Latency::ZERO, 1, &mut sim);
+    let mut nics = [0, 1].map(|i| (Nic::new(&fabric, Peer(i), 8, &mut sim), Peer(i)));
+    let (_, b) = granite_io::conformance::connect(&mut nics, &mut Nic::poll);
+    let pool = MessagePool::new(1);
+    let _ = nics[1].0.send(SEND, b, LEN, pool.acquire().unwrap());
 }

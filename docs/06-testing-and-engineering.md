@@ -94,7 +94,7 @@ The simulated network (`granite_sim::network`) delays each message by a latency 
 - **Liveness:** after faults stop and a quorum is healthy, the cluster makes progress within a bound.
 - **Resource bounds:** no pool is exhausted in a way that is not turned into backpressure.
 
-The reference model is a small, obviously correct in-memory implementation of the data model and transaction IR, maintained alongside the real one.
+The reference model is a small, obviously correct in-memory implementation of the data model and transaction IR, maintained alongside the real one. It lives in `granite_sim::model`, with a seeded generator of valid and invalid operations for any catalog and a harness that applies the same operations to the model and to an engine and compares every result and, on demand, the full table content.
 
 ### Operation
 

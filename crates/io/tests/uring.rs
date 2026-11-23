@@ -609,7 +609,7 @@ fn echo_between_two_shards() {
     let (client_core, server_core) = cores.split_once(',').expect("two cores");
     let sizes = [
         (HEADER, 1_000_000),
-        (4096, 1_000_000),
+        (SECTOR_SIZE as u32, 1_000_000),
         (MESSAGE_SIZE as u32, 10_000),
     ];
     let scratch = std::sync::Arc::new(Scratch::new("echo"));

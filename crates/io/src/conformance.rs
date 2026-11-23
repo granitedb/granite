@@ -499,7 +499,12 @@ pub fn run_stream<N, P>(
     N: Network,
     P: FnMut(&mut N) -> Option<Completion>,
 {
-    let sizes = [FORMAT.header_size as u32, 4096, MESSAGE_SIZE as u32];
+    // The middle size is 4 KiB, a sector.
+    let sizes = [
+        FORMAT.header_size as u32,
+        SECTOR_SIZE as u32,
+        MESSAGE_SIZE as u32,
+    ];
     let (a, b) = connections;
     let in_use = pool.counters().in_use;
     // The body bytes are written once; each send rewrites the header only.

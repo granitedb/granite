@@ -1227,29 +1227,30 @@ mod tests {
         ends.map(Option::unwrap)
     }
 
-    /// Sends a 4 KiB message from node 1 to node 0 and checks that it
+    /// Sends a one-sector (4 KiB) message from node 1 to node 0 and checks that it
     /// arrives whole.
     fn send_and_receive(nodes: &mut [Uring; 2], [a, b]: [Connection; 2], pool: &MessagePool) {
+        const LEN: u32 = SECTOR_SIZE as u32;
         let mut message = pool.acquire().unwrap();
         for (i, byte) in message.bytes_mut().unwrap().iter_mut().enumerate() {
             *byte = pattern(i);
         }
-        crate::conformance::seal(message.bytes_mut().unwrap(), 4096, 7);
-        let sent = message.bytes()[..4096].to_vec();
+        crate::conformance::seal(message.bytes_mut().unwrap(), LEN, 7);
+        let sent = message.bytes()[..LEN as usize].to_vec();
         nodes[0].recv(3, a, pool.acquire().unwrap()).unwrap();
-        nodes[1].send(4, b, 4096, message).unwrap();
+        nodes[1].send(4, b, LEN, message).unwrap();
         let Completion::Sent { result: Ok(()), .. } = wait(&mut nodes[1]) else {
             panic!("the send failed");
         };
         let Completion::Received {
             buffer,
-            result: Ok(4096),
+            result: Ok(LEN),
             ..
         } = wait(&mut nodes[0])
         else {
             panic!("the message did not arrive whole");
         };
-        assert_eq!(&buffer.bytes()[..4096], &sent[..]);
+        assert_eq!(&buffer.bytes()[..LEN as usize], &sent[..]);
     }
 
     /// Sends and receives that move one byte at a time are reassembled into

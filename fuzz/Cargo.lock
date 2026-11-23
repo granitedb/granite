@@ -68,10 +68,12 @@ name = "granite-fuzz"
 version = "0.0.0"
 dependencies = [
  "granite-base",
+ "granite-io",
  "granite-protocol",
  "granite-query",
  "granite-schema",
  "granite-schemac",
+ "granite-storage",
  "granite-txn",
  "granite-types",
  "libfuzzer-sys",

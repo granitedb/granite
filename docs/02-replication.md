@@ -47,24 +47,26 @@ Quorums (flexible): replication quorum Qr and view-change quorum Qv with Qr + Qv
 
 All messages share a 256-byte header (document 05) and are checksummed.
 
-| Message | Direction | Purpose |
-|---|---|---|
-| request | client -> primary | A batch of events for one operation type |
-| prepare | primary -> backups | Header (op, view, commit, parent checksum, timestamp, client, request) plus body |
-| prepare_ok | backup -> primary | Durable acknowledgement of one prepare |
-| commit | primary -> backups | Heartbeat carrying commit_max |
-| reply | primary -> client | Result of a request |
-| start_view_change | any -> all | Vote to leave the current view |
-| do_view_change | any -> new primary | Log suffix headers, log_view, op, commit |
-| start_view | new primary -> all | Authoritative log suffix headers for the new view |
-| request_start_view | replica -> primary | Ask for start_view after falling behind |
-| request_headers, headers | any | Repair of the header chain |
-| request_prepare | any | Repair of a missing or corrupt prepare by (op, checksum) |
-| nack_prepare | any | "I certainly never acknowledged this prepare": the sender has no prepare at that op and its slot is not faulty, holds a different prepare there, or holds this one but has not made it durable. A replica whose slot is corrupt never nacks. Lets a new primary truncate safely |
-| request_block, block | any | Grid repair by (address, checksum) |
-| ping, pong | any | Liveness and clock samples |
-| request_sync_checkpoint, sync_checkpoint | any | State sync |
-| eviction | primary -> client | Session evicted |
+| Message | Direction | Accepted in | Purpose |
+|---|---|---|---|
+| request | client -> primary | normal | A batch of events for one operation type |
+| prepare | primary -> backups | normal, view_change | Header (op, view, commit, parent checksum, timestamp, client, request) plus body |
+| prepare_ok | backup -> primary | normal | Durable acknowledgement of one prepare |
+| commit | primary -> backups | normal | Heartbeat carrying commit_max |
+| reply | primary -> client | none: clients receive it | Result of a request |
+| start_view_change | any -> all | normal, view_change, recovering | Vote to leave the current view |
+| do_view_change | any -> new primary | normal, view_change, recovering | Log suffix headers, log_view, op, commit |
+| start_view | new primary -> all | all | Authoritative log suffix headers for the new view |
+| request_start_view | replica -> primary | normal | Ask for start_view after falling behind |
+| request_headers, headers | any | normal, view_change | Repair of the header chain |
+| request_prepare | any | normal, view_change | Repair of a missing or corrupt prepare by (op, checksum) |
+| nack_prepare | any | view_change | "I certainly never acknowledged this prepare": the sender has no prepare at that op and its slot is not faulty, holds a different prepare there, or holds this one but has not made it durable. A replica whose slot is corrupt never nacks. Lets a new primary truncate safely |
+| request_block, block | any | all | Grid repair by (address, checksum) |
+| ping, pong | any | all | Liveness and clock samples |
+| request_sync_checkpoint, sync_checkpoint | any | normal | State sync |
+| eviction | primary -> client | none: clients receive it | Session evicted |
+
+A replica drops, and counts by reason, a message whose header or body does not check, whose command code is unknown, whose cluster id or group is not its own, whose sender index is not a replica of the group (requests excepted), or whose command its status does not accept (the "Accepted in" column; `granite_vsr::replica` holds the same rules, and a test compares the two). Every other message goes to its command's handler. The cross-shard propose and vote (document 04 section 4) are accepted in normal only.
 
 ## 3. Normal operation
 
@@ -90,7 +92,7 @@ Triggered when a backup hears nothing from the primary for a timeout (suspicion,
 4. Uncommitted ops in the suffix may or may not have been committed by the old primary. An op is kept unless the new primary collects a nack quorum (section 1) of nack_prepare messages for it, which proves no replication quorum could have acknowledged it; then it and every later op are truncated. An op whose prepare is corrupt everywhere but might have committed blocks the view change rather than risking data loss.
 5. The new primary sends start_view, re-replicates the uncommitted suffix, and resumes.
 
-Timeouts use deterministic exponential backoff with per-replica jitter derived from the replica index, so the simulator can reproduce them.
+Timeouts are deadlines on the monotonic clock, checked on every event-loop tick. They use deterministic exponential backoff (the base doubles on each consecutive firing, at most four times) with jitter derived from (group, replica, timeout, attempt) only, so the simulator reproduces them and the groups of a failed node do not fire together.
 
 ## 5. Repair, recovery and state sync
 

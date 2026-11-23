@@ -180,8 +180,10 @@ dependencies = [
 name = "granite-vsr"
 version = "0.0.0"
 dependencies = [
+ "granite-base",
  "granite-io",
  "granite-storage",
+ "zerocopy",
 ]
 
 [[package]]

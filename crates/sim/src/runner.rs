@@ -54,6 +54,7 @@ pub struct Scenario {
 pub const SCENARIOS: &[Scenario] = &[
     counter::SCENARIO,
     counter::LOST_WRITE,
+    crate::replica::SCENARIO,
     FIXTURE_PANIC,
     FIXTURE_ASSERTION,
     FIXTURE_HANG,

@@ -12,5 +12,8 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+granite-base.workspace = true
 granite-storage.workspace = true
 granite-io.workspace = true
+# Builds message headers in place, as granite-base does, without `unsafe`.
+zerocopy = "0.8.63"

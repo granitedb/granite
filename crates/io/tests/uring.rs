@@ -422,10 +422,12 @@ fn a_peer_that_stops_reading_fills_the_queue() {
     let registered = MessagePool::new(1);
     let (mut node, address) = node(&scratch, "a", &registered);
     let (connection, plain) = accept_plain(&mut node, address);
-    let pool = MessagePool::new(CONNECTION_QUEUE as u32 + 1);
+    // More buffers than the queue holds, so the queue's bound is what stops
+    // the sender.
+    let pool = MessagePool::new(2 * CONNECTION_QUEUE as u32);
     let len = MESSAGE_SIZE as u32;
     // Buffers the backend gave back, ready to be sent again.
-    let mut idle: Vec<Message> = (0..=CONNECTION_QUEUE)
+    let mut idle: Vec<Message> = (0..2 * CONNECTION_QUEUE)
         .map(|_| message(&pool, len))
         .collect();
     let (mut in_flight, mut sent) = (0, 0u64);
@@ -458,6 +460,7 @@ fn a_peer_that_stops_reading_fills_the_queue() {
         }
         // The kernel's buffers are full and the queue too: nothing moves.
         if quiet.elapsed() > Duration::from_millis(500) {
+            assert_eq!(in_flight, CONNECTION_QUEUE, "the queue is full");
             break node.send(sent, connection, len, idle.pop().unwrap());
         }
     };
@@ -466,7 +469,6 @@ fn a_peer_that_stops_reading_fills_the_queue() {
         panic!("a send past a full queue is accepted");
     };
     println!("{sent} messages accepted before the queue filled");
-    assert_eq!(in_flight, CONNECTION_QUEUE, "the queue is full");
     assert_eq!(allocations, 0, "allocations while filling");
     drop(full);
 

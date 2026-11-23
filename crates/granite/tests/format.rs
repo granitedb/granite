@@ -72,7 +72,9 @@ fn format_creates_the_fixed_zones_and_the_superblock() {
     assert_eq!(file.len() as u64, file_size(0));
     let sb = zones(0)[Zone::Superblock as usize];
     let sb = &file[sb.offset as usize..sb.end() as usize];
-    assert_eq!(superblock::open(sb, A), Ok(()));
+    let opened = superblock::open(sb, A).expect("the formatted superblock opens");
+    assert_eq!(opened.record, superblock::Record::new(A));
+    assert_eq!(opened.stale, [false; superblock::COPIES]);
     assert_eq!(
         superblock::open(sb, Identity { cluster: 0xB, ..A }),
         Err(OpenError::Cluster { stored: 0xA })

@@ -152,7 +152,7 @@ Package names carry a `granite-` prefix (`crates/vsr` is the package `granite-vs
 
 | Path | Responsibility | Depends on |
 |---|---|---|
-| `crates/base` | Checksums, fixed-layout helpers, ids, error codes, constants | |
+| `crates/base` | Checksums, fixed-layout helpers, the message header, ids, error codes, constants | |
 | `crates/io` | Traits and the three backends | base |
 | `crates/storage` | Superblock, WAL, grid, free set, block cache | base, io |
 | `crates/lsm` | Memtable, manifest, levels, compaction, iterators | storage |

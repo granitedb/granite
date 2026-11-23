@@ -6,28 +6,73 @@ One protocol for client-to-shard and shard-to-shard traffic. TCP, one connection
 
 ### Header (256 bytes, little-endian, fixed layout)
 
-| Field | Type | Notes |
-|---|---|---|
-| checksum | u128 | Over the rest of the header |
-| checksum_body | u128 | Over the body |
-| parent | u128 | Checksum of the previous prepare (hash chain); zero elsewhere |
-| cluster | u128 | Cluster id; mismatches are dropped |
-| client | u128 | Client session id, or zero |
-| txn | u128 | Cross-shard transaction id, or zero |
-| group | u32 | Target group |
-| tablet_epoch | u32 | Sender's view of the tablet map |
-| schema_version | u32 | Sender's schema version |
-| view | u32 | |
-| op | u64 | |
-| commit | u64 | |
-| timestamp | u64 | Prepare timestamp, or sender's highest seen timestamp |
-| request | u32 | Session request number |
-| size | u32 | Header plus body |
-| replica | u8 | Sender replica index |
-| command | u8 | Protocol message kind (document 02 section 2, document 04) |
-| operation | u8 | State machine operation |
-| version | u8 | Protocol version |
-| reserved | bytes | Must be zero |
+| Field | Offset | Type | Notes |
+|---|---|---|---|
+| checksum | 0 | u128 | Over the rest of the header |
+| checksum_body | 16 | u128 | Over the body |
+| parent | 32 | u128 | Checksum of the previous prepare (hash chain); zero elsewhere |
+| cluster | 48 | u128 | Cluster id; mismatches are dropped |
+| client | 64 | u128 | Client session id, or zero |
+| txn | 80 | u128 | Cross-shard transaction id, or zero |
+| group | 96 | u32 | Target group |
+| tablet_epoch | 100 | u32 | Sender's view of the tablet map |
+| schema_version | 104 | u32 | Sender's schema version |
+| view | 108 | u32 | |
+| op | 112 | u64 | |
+| commit | 120 | u64 | |
+| timestamp | 128 | u64 | Prepare timestamp, or sender's highest seen timestamp |
+| request | 136 | u32 | Session request number |
+| size | 140 | u32 | Header plus body |
+| replica | 144 | u8 | Sender replica index |
+| command | 145 | u8 | Protocol message kind (document 02 section 2, document 04); codes below |
+| operation | 146 | u8 | State machine operation (document 03 section 4); codes below |
+| version | 147 | u8 | Protocol version, currently 1 |
+| reserved | 148 | [u8; 108] | Must be zero |
+
+The header is `granite_base::header::Header`. It lives in `crates/base`, not `crates/protocol`, because WAL prepares in `crates/storage` start with it too. Compile-time assertions fix its size (`FORMAT.header_size`) and every offset above; a test compares them with this table.
+
+Command codes. Code 0 is not a command, so an all-zero header is rejected. Codes 1 to 20 are the messages of document 02 section 2 in table order, 21 and 22 the cross-shard messages of document 04 section 4:
+
+| Code | Command |
+|---|---|
+| 1 | request |
+| 2 | prepare |
+| 3 | prepare_ok |
+| 4 | commit |
+| 5 | reply |
+| 6 | start_view_change |
+| 7 | do_view_change |
+| 8 | start_view |
+| 9 | request_start_view |
+| 10 | request_headers |
+| 11 | headers |
+| 12 | request_prepare |
+| 13 | nack_prepare |
+| 14 | request_block |
+| 15 | block |
+| 16 | ping |
+| 17 | pong |
+| 18 | request_sync_checkpoint |
+| 19 | sync_checkpoint |
+| 20 | eviction |
+| 21 | propose |
+| 22 | vote |
+
+Operation codes. Codes 1 to 8 are the operations of document 03 section 4 in table order:
+
+| Code | Operation |
+|---|---|
+| 0 | none (a message that carries no operation) |
+| 1 | insert |
+| 2 | upsert |
+| 3 | update |
+| 4 | delete |
+| 5 | get |
+| 6 | scan |
+| 7 | execute |
+| 8 | query |
+
+A received header is rejected, each reason with its own error, when: it is shorter than 256 bytes, its checksum does not match, the version is not 1, the command or operation code is unknown, a reserved byte is not zero, or `size` is below 256 or above the message limit. The body is then rejected if its length is not `size - 256` or its checksum does not match. Later cards append codes to these tables; each addition, like any change to these rules, is a protocol change and raises the version.
 
 ### Bodies
 

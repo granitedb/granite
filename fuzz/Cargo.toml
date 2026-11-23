@@ -19,6 +19,8 @@ granite-schemac = { path = "../crates/schemac" }
 granite-txn = { path = "../crates/txn" }
 granite-base = { path = "../crates/base" }
 granite-query = { path = "../crates/query" }
+# The header decoder target writes and compares header bytes.
+zerocopy = "0.8.63"
 
 [workspace]
 
@@ -67,6 +69,13 @@ bench = false
 [[bin]]
 name = "fragment_validate"
 path = "fuzz_targets/fragment_validate.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "header_decode"
+path = "fuzz_targets/header_decode.rs"
 test = false
 doc = false
 bench = false

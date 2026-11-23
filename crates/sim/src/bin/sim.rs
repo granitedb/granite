@@ -13,6 +13,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use granite_io::memory::SplitMix64;
+use granite_io::message_pool::MessagePool;
 use granite_sim::runner::{self, Log, SCENARIOS, Scenario};
 
 const USAGE: &str = "usage: sim [--scenario NAME] [--jobs N] \
@@ -50,7 +51,8 @@ fn main() -> ExitCode {
     let scenario = args.scenario;
     if let (true, Seeds::One(seed)) = (args.trace, &args.seeds) {
         let mut log = Log::printing();
-        return match runner::run(scenario, *seed, &mut log) {
+        let pool = MessagePool::new(runner::POOL);
+        return match runner::run(scenario, *seed, &mut log, &pool) {
             Ok(()) => {
                 println!("seed {seed} of scenario {} passed", scenario.name);
                 ExitCode::SUCCESS
@@ -74,13 +76,14 @@ fn main() -> ExitCode {
     let deadline = deadline(&args.seeds);
     let work = || {
         let mut log = Log::new(LAST);
+        let pool = MessagePool::new(runner::POOL);
         loop {
             let i = next.fetch_add(1, Ordering::Relaxed);
             let Some(seed) = seed_at(&args.seeds, i, deadline) else {
                 break;
             };
             log.clear();
-            if let Err(failure) = runner::run(scenario, seed, &mut log) {
+            if let Err(failure) = runner::run(scenario, seed, &mut log, &pool) {
                 failed.fetch_add(1, Ordering::Relaxed);
                 let report = runner::report(scenario, seed, &commit, &failure, &log);
                 let mut reports = reports.lock().expect("no worker panics");

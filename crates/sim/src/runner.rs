@@ -7,12 +7,23 @@
 //! configuration, printed with a failure, and the run itself, which reports
 //! its events to a [`Log`] and returns the checker that failed. A new
 //! scenario is one more entry in [`SCENARIOS`].
+//!
+//! Each worker thread hands every seed it runs the same message pool, of
+//! [`POOL`] buffers: allocating one per seed costs more than the seed, and
+//! with many threads its unmapping stalls them all. A seed must return every
+//! buffer, and a scenario must read only bytes it wrote in that seed, so
+//! that a seed run alone, from a fresh pool, does the same.
 
 use std::collections::VecDeque;
 use std::panic::{self, AssertUnwindSafe};
 
+use granite_io::message_pool::MessagePool;
+
 use crate::node::Op;
 use crate::{Scheduler, counter, network, storage};
+
+/// Buffers of the message pool a scenario runs with.
+pub const POOL: u32 = 48;
 
 /// Events a run may log at one virtual time before it counts as hung.
 // shortcut: a run that spins without logging is not caught and stalls the
@@ -34,8 +45,9 @@ pub struct Scenario {
     pub name: &'static str,
     /// What the seed turns on; a function of the seed only.
     pub swarm: fn(u64) -> String,
-    /// Runs the seed, reporting its events to the log.
-    pub run: fn(u64, &mut Log) -> Result<(), Failure>,
+    /// Runs the seed, reporting its events to the log, with buffers from
+    /// the pool.
+    pub run: fn(u64, &mut Log, &MessagePool) -> Result<(), Failure>,
 }
 
 /// Every scenario the runner knows; the first is the default.
@@ -202,11 +214,24 @@ pub fn report(
     out
 }
 
-/// Runs one seed of `scenario`, its events going to `log`. A panic is a
-/// failure, and a panic of the log's hang check is a `hang`; the default
-/// panic hook still prints where it happened.
-pub fn run(scenario: &Scenario, seed: u64, log: &mut Log) -> Result<(), Failure> {
-    let payload = match panic::catch_unwind(AssertUnwindSafe(|| (scenario.run)(seed, log))) {
+/// Runs one seed of `scenario`, its events going to `log` and its buffers
+/// coming from `pool`, which it leaves as it found it: every buffer free. A
+/// panic is a failure, and a panic of the log's hang check is a `hang`; the
+/// default panic hook still prints where it happened.
+pub fn run(
+    scenario: &Scenario,
+    seed: u64,
+    log: &mut Log,
+    pool: &MessagePool,
+) -> Result<(), Failure> {
+    assert_eq!(pool.counters().in_use, 0, "the pool starts free");
+    let result = panic::catch_unwind(AssertUnwindSafe(|| (scenario.run)(seed, log, pool)));
+    assert_eq!(
+        pool.counters().in_use,
+        0,
+        "seed {seed} returned every buffer"
+    );
+    let payload = match result {
         Ok(result) => return result,
         Err(payload) => payload,
     };
@@ -231,7 +256,7 @@ pub fn run(scenario: &Scenario, seed: u64, log: &mut Log) -> Result<(), Failure>
 const FIXTURE_PANIC: Scenario = Scenario {
     name: "fixture-panic",
     swarm: |_| String::from("none"),
-    run: |seed, log| {
+    run: |seed, log, _| {
         log.push(0, Event::Note("seed", seed));
         if seed % 3 == 0 {
             panic!("fixture panic at seed {seed}");
@@ -243,7 +268,7 @@ const FIXTURE_PANIC: Scenario = Scenario {
 const FIXTURE_ASSERTION: Scenario = Scenario {
     name: "fixture-assertion",
     swarm: |_| String::from("none"),
-    run: |seed, log| {
+    run: |seed, log, _| {
         log.push(0, Event::Note("seed", seed));
         assert!(seed % 3 != 0, "fixture assertion at seed {seed}");
         Ok(())
@@ -253,7 +278,7 @@ const FIXTURE_ASSERTION: Scenario = Scenario {
 const FIXTURE_HANG: Scenario = Scenario {
     name: "fixture-hang",
     swarm: |_| String::from("none"),
-    run: |seed, log| {
+    run: |seed, log, _| {
         let mut sim = Scheduler::new(seed, 1);
         sim.schedule(0, ()).expect("room");
         // The event reschedules itself at the same time on every third seed:

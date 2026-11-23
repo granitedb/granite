@@ -749,9 +749,8 @@ pub fn swarm(seed: u64) -> Config {
 
 const CHECKER: &str = "counter: never goes back, never loses an acknowledged increment";
 
-fn check(seed: u64, config: &Config, log: &mut Log) -> Result<(), Failure> {
-    let pool = MessagePool::new(48);
-    match run_logged(seed, config, &pool, log).violation {
+fn check(seed: u64, config: &Config, log: &mut Log, pool: &MessagePool) -> Result<(), Failure> {
+    match run_logged(seed, config, pool, log).violation {
         Some(message) => Err(Failure {
             checker: CHECKER,
             message,
@@ -764,7 +763,7 @@ fn check(seed: u64, config: &Config, log: &mut Log) -> Result<(), Failure> {
 pub const SCENARIO: Scenario = Scenario {
     name: "counter",
     swarm: |seed| format!("{:?}", swarm(seed)),
-    run: |seed, log| check(seed, &swarm(seed), log),
+    run: |seed, log, pool| check(seed, &swarm(seed), log, pool),
 };
 
 /// Injected bug: the counter whose replicas acknowledge a write before it is
@@ -772,7 +771,7 @@ pub const SCENARIO: Scenario = Scenario {
 pub const LOST_WRITE: Scenario = Scenario {
     name: "counter-lost-write",
     swarm: |seed| format!("{:?}", lost_write(seed)),
-    run: |seed, log| check(seed, &lost_write(seed), log),
+    run: |seed, log, pool| check(seed, &lost_write(seed), log, pool),
 };
 
 fn lost_write(seed: u64) -> Config {

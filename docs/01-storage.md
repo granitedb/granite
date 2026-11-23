@@ -58,7 +58,7 @@ The checkpoint interval is a multiple of the compaction interval, so a checkpoin
 
 Holds: cluster id, group id, replica index, format version, VSR state (view, log view, the headers of the log installed with log view (document 02 section 4), commit op, checkpoint op), checkpoint references (manifest root block, free-set blocks, client-session table block), each with address and checksum. Written as 4 copies in sequence, each with its own checksum and a sequence number. On open, the highest sequence number with a valid quorum of copies wins. A superblock update is the atomic commit point of a checkpoint.
 
-Format version 1, the record `granite format` writes, holds the identity and the format constants. VSR state, checkpoint references and the sequence number come with the superblock update logic. Each copy is 64 KiB, little-endian:
+Format version 2. `granite format` writes sequence number 0, zero VSR state and zero references (address 0 is no block). Each copy is 64 KiB, little-endian; `C` is 48 plus 8 per format constant:
 
 | Offset | Field |
 |---|---|
@@ -67,11 +67,29 @@ Format version 1, the record `granite format` writes, holds the identity and the
 | 32 | Format version, `u32` |
 | 36 | Group id, `u32` |
 | 40 | Replica index, `u8` |
-| 41 | Zero, 7 bytes |
+| 41 | Copy index, 0 to 3, `u8` |
+| 42 | Zero, 6 bytes |
 | 48 | The format constants (`granite_base::constants::FORMAT`), each a `u64`, in declaration order |
+| C | Sequence number, `u64` |
+| C + 8 | View, `u32` |
+| C + 12 | Log view, `u32` |
+| C + 16 | Commit op, `u64` |
+| C + 24 | Checkpoint op, `u64` |
+| C + 32 | Manifest root reference: address `u64`, checksum `u128` |
+| C + 56 | Free set reference, the same way |
+| C + 80 | Client session table reference, the same way |
+| C + 104 | Number of headers, `u32`, at most as many as fit in the copy |
+| C + 108 | Zero, 4 bytes |
+| C + 112 | The headers of the log installed with log view, 256 bytes each |
 | after them | Zero, to the end of the copy |
 
-Opening checks, in this order, each failure with its own typed error: a copy with a valid checksum exists, the version is the binary's (a file with a higher or lower version is refused, since the version decides how the rest is laid out), every format constant matches the binary's, the zero bytes are zero, and the cluster id, group id and replica index are the ones the replica was started with.
+The copies of one record differ only in the copy index and the checksum. How many headers VSR stores, and what a checkpoint puts into the references, belong to the VSR and checkpoint tasks.
+
+An update writes the whole record with the next sequence number to copy 0, 1, 2 and 3 in turn, and makes each copy durable (write, then fsync) before it writes the next. This is the quorum rule: at every instant the old record or the new one is on at least 2 copies, so a crash leaves one of them, never a mix. A sequence number other than the previous plus one is a bug and fails an assertion. Then the update reads the four copies back and writes again, in order, every copy that does not hold the new record at its own offset, until all four do. The update has finished, and the checkpoint is committed, only then. If the copies still need rewriting after 4 reads (`READ_BACKS_MAX`), the device keeps losing or misdirecting writes and the replica stops, as it does when a superblock write fails.
+
+The read back is there for a misdirected write. A copy written at another copy's offset leaves its own offset with the old record and the other copy invalid, so only 2 copies may hold the new record. If the update finished there, a crash during the next update could leave no record on 2 copies. After the read back every finished update or open leaves 4 good copies, so a crash in the next update leaves a quorum. What 4 copies with a quorum of 2 cannot survive is a misdirected write and a torn write in the same update, before it finishes: they can leave one copy of each record and one invalid copy. Such a replica stops and repairs from its peers.
+
+Open reads the four copies. A copy counts for its position only if its checksum holds and its copy index is its position, so a copy written at another copy's offset (a misdirected write) does not count; an unreadable copy does not count either. Open chooses the record with the highest sequence number held by at least 2 copies, then rewrites, in order, every copy that does not hold it, and reads back and rewrites as an update does. Opening checks, in this order, each failure with its own typed error and before anything is written: no copy with a valid checksum has another version (the version decides how the rest is laid out, so a file with a higher or lower version is refused), a record is held by 2 copies and no other record with its sequence number is, every format constant matches the binary's, the number of headers fits, the zero bytes are zero, and the cluster id, group id and replica index are the ones the replica was started with.
 
 ### WAL
 

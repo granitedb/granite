@@ -60,6 +60,18 @@ Every run checks `TypeOK`, `OneCommitPerOp`, `CommittedNotLost`, `AckedIsDurable
 
 A view change is either in the old configuration (`*Old`: before the reconfigure op commits, between its commit and the boundary, or at the boundary while the new configuration starts) or in the new one (`*New`: at its start, or after it commits op 3). One view change per behaviour, at any point, keeps each run exhaustive; the witnesses below show that each position is reached.
 
+Which run covers each view-change position of gate 2 (bounds: `RecOp = 1`, `Boundary = 2`, no crash; old and new views as in the table above). "At the boundary" has two sides: a view change in the old configuration once op 2 is committed and the new configuration has started, and one in the new configuration before it prepares any op.
+
+| Position | Replace 0,1,2 → 3,0,1 | Grow 0,1,2 → 3,0,1,2,4 | Shrink 0,1,2,3,4 → 2,0,1 |
+|---|---|---|---|
+| Before the reconfigure op commits | `ReplaceOld`, 3 ops, 1,042,608 states | `GrowOld`, 3 ops, 7,177,428 states | not checked: `large/ShrinkOld` (open, below) |
+| Between its commit and the boundary | `ReplaceOld` | `GrowOld` | not checked: `large/ShrinkOld` |
+| At the boundary, old configuration | `ReplaceOld` | `GrowOld` | not checked: `large/ShrinkOld` |
+| At the boundary, new configuration | `ReplaceNew`, 3 ops, 31,017 states | `GrowNew`, 3 ops, 14,134,118 states | `ShrinkNew`, 3 ops, 631,013 states |
+| After the boundary | `ReplaceNew` | `GrowNew` | `ShrinkNew` |
+
+Each checked cell is shown reached by its witness (Witnesses below). With a crash as well, replacement is checked by `ReplaceOldCrash` (11,073,361 states) and `ReplaceNewCrash` (426,358).
+
 ### Shrinking with a view change in the old configuration (gate open)
 
 `large/ShrinkOld` (5 replicas in the old configuration, views 0–1 there, ops up to the boundary, the smallest bounds the gate allows) is not checked. Measured, under load averages of 22 to 58:

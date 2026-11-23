@@ -696,6 +696,8 @@ Design reference for the whole phase: `docs/01-storage.md`.
 - [ ] A scan range that spans two partitions is rejected with a typed error.
 - [ ] Reads never change stored state: the data-file hash is equal before and after 1,000,000 reads.
 - [ ] No read slice exceeds 1 ms.
+- [ ] Three deliberate defects in the engine are each caught by the reference model's harness: a lost row after compaction, a wrong duplicate result code, a scan that skips the last row (three injected bugs) (from T1.5.3).
+- [ ] Model and engine agree over seed gate 10,000 with crashes and storage faults enabled (from T1.5.3).
 
 ## T1.5.3 Reference model in `sim`
 
@@ -706,17 +708,15 @@ Design reference for the whole phase: `docs/01-storage.md`.
 - A generator of random valid and invalid workloads for a given schema.
 - A comparison harness: apply the same ops to engine and model, compare every result and, on demand, the full table content.
 
-**Not in this card.** Linearizability checking of concurrent histories (T2.3.2).
+**Not in this card.** Linearizability checking of concurrent histories (T2.3.2). Running the harness against the engine moves to T1.5.2, the first card with insert, get, scan and compaction: the three injected engine defects, and model and engine agreeing over seed gate 10,000 with crashes and storage faults.
 
 **Depends on.** T1.4.3, T1.4.4.
 
 **Gates.**
 - [ ] The model covers insert, get and scan with all result codes of T1.5.1 and T1.5.2.
 - [ ] The model imports nothing from `crates/storage`, `crates/lsm`, `crates/columnar` or `crates/shard` (dependency check in CI).
-- [ ] Three deliberate defects in the engine are each caught by the harness: a lost row after compaction, a wrong duplicate result code, a scan that skips the last row (three injected bugs).
 - [ ] The workload generator produces every result code at least once per 10,000 operations (coverage counter in a test).
 - [ ] The model is under 1,500 lines for phase 1, and has its own unit tests for each operation.
-- [ ] Model and engine agree over seed gate 10,000 with crashes and storage faults enabled.
 
 ## T1.5.4 Single-shard server binary and minimal Rust client
 

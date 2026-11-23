@@ -8,6 +8,12 @@
 //! new one on at least [`QUORUM`] copies, and open chooses the record with the
 //! highest sequence number that a quorum of copies holds, then rewrites the
 //! copies that do not hold it.
+//!
+//! An update and the rewrites of an open finish only once all four copies,
+//! read back, hold the record at their own offsets; a copy that does not is
+//! written again. A write that landed elsewhere then cannot leave fewer than
+//! four good copies behind a finished update or open, so a crash in the next
+//! update still leaves a quorum.
 
 use granite_base::checksum::checksum;
 use granite_base::constants::{FORMAT, FormatMismatch};
@@ -35,6 +41,11 @@ const VSR: usize = SEQUENCE + 8;
 const REFERENCES: usize = VSR + 24;
 const HEADER_COUNT: usize = REFERENCES + 3 * 24;
 const HEADERS: usize = HEADER_COUNT + 8;
+
+/// Reads of all four copies in one open or update that may find copies to
+/// rewrite; the next such read stops the replica, since a device that keeps
+/// losing or misdirecting writes cannot hold the superblock.
+pub const READ_BACKS_MAX: u32 = 4;
 
 /// Most headers a record holds: as many as fit in a copy.
 pub const HEADERS_MAX: usize = (COPY - HEADERS) / HEADER;
@@ -337,6 +348,8 @@ pub struct Superblock {
     pending: [bool; COPIES],
     /// The storage refused the current step.
     refused: bool,
+    /// Reads of all copies in this open or update.
+    read_backs: u32,
 }
 
 impl Superblock {
@@ -353,6 +366,7 @@ impl Superblock {
             step: Step::Idle,
             pending: [false; COPIES],
             refused: false,
+            read_backs: 0,
         }
     }
 
@@ -362,15 +376,18 @@ impl Superblock {
     }
 
     /// Starts reading every copy. When they are read, open chooses the
-    /// record and rewrites the stale copies; if it fails, it writes nothing.
+    /// record and rewrites the stale copies until every copy, read back,
+    /// holds it; if it fails, it writes nothing.
     pub fn open(&mut self, storage: &mut impl Storage) {
         assert!(self.step == Step::Idle && self.record.is_none());
+        self.read_backs = 0;
         self.step = Step::Read(0);
         self.submit(storage);
     }
 
     /// Starts writing `record` to every copy, the atomic commit point of a
-    /// checkpoint. Its sequence number is one more than the record's on disk.
+    /// checkpoint, and rewrites copies until every copy, read back, holds it.
+    /// Its sequence number is one more than the record's on disk.
     pub fn update(&mut self, storage: &mut impl Storage, record: Record) {
         assert_eq!(self.step, Step::Idle);
         let current = self.record.as_ref().expect("the superblock is open");
@@ -383,7 +400,11 @@ impl Superblock {
         encode(&record, &mut self.bytes()[..COPY]);
         self.staging = Some(record);
         self.pending = [true; COPIES];
-        assert!(self.next(storage).is_none(), "an update writes every copy");
+        self.read_backs = 0;
+        assert!(
+            self.write_next(storage).is_none(),
+            "an update writes every copy"
+        );
     }
 
     /// Takes the completion of the operation in flight. Returns the outcome
@@ -410,19 +431,33 @@ impl Superblock {
                     self.submit(storage);
                     return None;
                 }
-                let identity = self.identity;
-                match open(&self.bytes()[COPY..][..COPIES * COPY], identity) {
-                    Err(error) => {
-                        self.step = Step::Idle;
-                        Some(Err(error))
-                    }
-                    Ok(opened) => {
-                        encode(&opened.record, &mut self.bytes()[..COPY]);
-                        self.staging = Some(opened.record);
-                        self.pending = opened.stale;
-                        self.next(storage)
+                // Without a record staged, this is the first read of an open.
+                if self.staging.is_none() {
+                    let identity = self.identity;
+                    match open(&self.bytes()[COPY..][..COPIES * COPY], identity) {
+                        Err(error) => {
+                            self.step = Step::Idle;
+                            return Some(Err(error));
+                        }
+                        Ok(opened) => self.staging = Some(opened.record),
                     }
                 }
+                let record = self.staging.take().expect("a record is staged");
+                let bytes = self.bytes();
+                encode(&record, &mut bytes[..COPY]);
+                let mut pending = [false; COPIES];
+                for (copy, pending) in pending.iter_mut().enumerate() {
+                    seal(&mut bytes[..COPY], copy);
+                    *pending = bytes[..COPY] != bytes[(copy + 1) * COPY..][..COPY];
+                }
+                self.read_backs += 1;
+                assert!(
+                    !pending.contains(&true) || self.read_backs <= READ_BACKS_MAX,
+                    "the superblock copies do not hold what was written: the replica stops"
+                );
+                self.staging = Some(record);
+                self.pending = pending;
+                self.write_next(storage)
             }
             (Step::Write(copy), Completion::Write { buffer, result, .. }) => {
                 self.buffer = Some(buffer);
@@ -434,7 +469,13 @@ impl Superblock {
             (Step::Fsync(copy), Completion::Fsync { result, .. }) => {
                 result.expect("the superblock cannot be made durable: the replica stops");
                 self.pending[copy] = false;
-                self.next(storage)
+                if self.pending.contains(&true) {
+                    return self.write_next(storage);
+                }
+                // Read every copy back: a write may have landed elsewhere.
+                self.step = Step::Read(0);
+                self.submit(storage);
+                None
             }
             (step, completion) => panic!("{completion:?} during {step:?}"),
         }
@@ -449,7 +490,7 @@ impl Superblock {
     }
 
     /// Writes the next pending copy, or finishes.
-    fn next(&mut self, storage: &mut impl Storage) -> Option<Result<(), OpenError>> {
+    fn write_next(&mut self, storage: &mut impl Storage) -> Option<Result<(), OpenError>> {
         let Some(copy) = self.pending.iter().position(|&p| p) else {
             self.step = Step::Idle;
             self.record = self.staging.take();

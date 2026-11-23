@@ -55,16 +55,14 @@ use std::rc::Rc;
 use granite_base::header::Header;
 use granite_io::memory::SplitMix64;
 use granite_io::message_pool::Message;
-use granite_io::{Completion, Connection, Full, Network, NetworkError, Peer, Random, Tag, Time};
+use granite_io::{
+    CONNECT_TIMEOUT, Completion, Connection, Full, Network, NetworkError, Peer, Random, Tag, Time,
+};
 
 use crate::storage::MILLION;
 use crate::{Clock, Scheduler};
 
 const MICROSECOND: u64 = 1_000;
-
-/// How long a connect across a partition waits before it fails, in
-/// nanoseconds of virtual time.
-pub const CONNECT_TIMEOUT: u64 = 1_000_000_000;
 
 /// The one-way delay of a message: uniform in `min..=max` nanoseconds.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

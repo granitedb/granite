@@ -111,6 +111,11 @@ pub enum NetworkError {
     Closed,
 }
 
+/// How long a connect may take before it fails with
+/// [`NetworkError::TimedOut`], in nanoseconds. Every backend uses it, so a
+/// simulated connect times out as a real one does.
+pub const CONNECT_TIMEOUT: u64 = 2_000_000_000;
+
 /// The result of one operation.
 #[derive(Debug)]
 pub enum Completion {

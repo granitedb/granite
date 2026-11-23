@@ -14,6 +14,6 @@ pub mod traits;
 pub mod uring;
 
 pub use traits::{
-    Completion, Connection, Full, Io, Network, NetworkError, Peer, Random, Storage, StorageError,
-    Tag, Time, Zone,
+    CONNECT_TIMEOUT, Completion, Connection, Full, Io, Network, NetworkError, Peer, Random,
+    Storage, StorageError, Tag, Time, Zone,
 };

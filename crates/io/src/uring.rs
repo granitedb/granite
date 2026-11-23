@@ -58,7 +58,8 @@
 
 use crate::message_pool::{MESSAGE_SIZE, Message, MessagePool, SECTOR_SIZE};
 use crate::traits::{
-    Completion, Connection, Full, Network, NetworkError, Peer, Storage, StorageError, Tag, Zone,
+    CONNECT_TIMEOUT, Completion, Connection, Full, Network, NetworkError, Peer, Storage,
+    StorageError, Tag, Zone,
 };
 use granite_base::constants::FORMAT;
 use granite_base::header::Header;
@@ -81,8 +82,6 @@ const POOL: u16 = 0;
 
 /// Sends queued on one connection at most, and as many receives.
 pub const CONNECTION_QUEUE: usize = 8;
-/// How long a connect may take, in nanoseconds.
-pub const CONNECT_TIMEOUT: u64 = 2_000_000_000;
 /// User data of the timeout linked to each connect, whose own completion is
 /// ignored.
 const TIMEOUT: u64 = u64::MAX;

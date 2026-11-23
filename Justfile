@@ -22,9 +22,10 @@ build:
 test:
     cargo test --workspace --locked
 
-# Check that overflow checks and assertions stay on in the release profile, with a test built in it.
+# Check that overflow checks and assertions stay on in the release profile, with a test built in it, and that a release build offers only its system's I/O backend.
 test-release:
     GRANITE_PROFILE=release cargo test --release --locked -p granite-types --test release
+    cargo test --release --locked -p granite --test start
 
 # The full arithmetic gates of T1.4.2, in the release profile: every 16-bit pair and 10,000,000 cases per operation and type (about half an hour). Pass a seed with `GRANITE_SEED=<n> just test-arithmetic`.
 test-arithmetic:

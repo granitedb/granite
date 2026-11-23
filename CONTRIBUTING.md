@@ -21,7 +21,7 @@ Every external crate is code we ship and must trust, so the dependency tree is k
 
 **Audit step.** Before approving, the reviewer:
 
-1. Checks that `just deny` passes. It rejects any crate, direct or transitive, whose licence is not in the allowed list in `deny.toml`, any crate with a RustSec advisory (<https://rustsec.org>): a vulnerability, or an unmaintained or unsound crate, banned crates, unknown sources, and a second major version of a crate that `deny.toml` does not list as an exception. A change to `deny.toml` that allows a licence, ignores an advisory or adds an exception states why.
+1. Checks that `just deny` passes. It rejects any crate, direct or transitive, whose licence is not in the allowed list in `deny.toml` (`gateway/deny.toml` for the gateway), any crate with a RustSec advisory (<https://rustsec.org>): a vulnerability, or an unmaintained or unsound crate, banned crates, unknown sources, and a second major version of a crate that `deny.toml` does not list as an exception. A change to either `deny.toml` that allows a licence, ignores an advisory or adds an exception states why.
 2. Checks that the licence `cargo-deny` read for each new crate matches the crate's own licence files.
 3. Compares `cargo tree -p granite` before and after the change and reads the `Cargo.lock` diff, so every new transitive crate is visible and accounted for.
 4. Reads the crate's `unsafe` code and build script, if it has any, and checks that it is maintained.

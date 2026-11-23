@@ -1,12 +1,10 @@
-# cargo-deny policy for every Cargo.lock in the repository: the workspace and
-# the gateway. `just deny` runs it; the review rules are in CONTRIBUTING.md.
+# cargo-deny policy for the workspace and the fuzz targets. `just deny` runs
+# it; the review rules are in CONTRIBUTING.md. The gateway has its own copy,
+# gateway/deny.toml, with the exceptions DataFusion needs (decision 0004), so
+# that they never apply here; keep the shared parts of the two in step.
 #
-# Injected bugs (T0.1.5), each must make `just deny` fail; revert afterwards
-# with `git checkout gateway/`:
-#   GPL licence:    cargo add --manifest-path gateway/Cargo.toml binstalk@=0.30.0
-#                   fails with: error[rejected]: failed to satisfy license requirements
-#   Known advisory: cargo add --manifest-path gateway/Cargo.toml smallvec@=1.6.0
-#                   fails with: error[vulnerability] for RUSTSEC-2021-0003
+# Injected bugs (T0.1.5), each must make `just deny` fail, are listed in
+# gateway/deny.toml, whose tree takes new crates most easily.
 
 [graph]
 all-features = true

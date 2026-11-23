@@ -22,10 +22,11 @@ build:
 test:
     cargo test --workspace --locked
 
-# Check that overflow checks and assertions stay on in the release profile, with a test built in it, and that a release build offers only its system's I/O backend.
+# Check that overflow checks and assertions stay on in the release profile, with a test built in it, that a release build offers only its system's I/O backend, and that an idle simulated hour takes under a second.
 test-release:
     GRANITE_PROFILE=release cargo test --release --locked -p granite-types --test release
     cargo test --release --locked -p granite --test start
+    GRANITE_PROFILE=release cargo test --release --locked -p granite-sim --test scheduler an_idle_hour_takes_under_a_second
 
 # The full arithmetic gates of T1.4.2, in the release profile: every 16-bit pair and 10,000,000 cases per operation and type (about half an hour). Pass a seed with `GRANITE_SEED=<n> just test-arithmetic`.
 test-arithmetic:

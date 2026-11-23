@@ -1,21 +1,27 @@
 //! The write-ahead log: a ring of prepares and a ring of their headers
 //! (document 01 section 2, WAL). This is the write path and the read by op;
-//! recovery (T1.1.4) and repair from peers (T2.2.4) build on it.
+//! [`recovery`] classifies the slots after a crash; repair from peers
+//! (T2.2.4) builds on it.
 //!
-//! An append goes through four I/Os, each submitted only after the previous
-//! one completed: the prepare is written to its slot of the prepare ring and
-//! made durable with an fsync; its header is then copied into the in-memory
-//! header ring, and the header ring's sector that holds it is written and
-//! made durable with an fsync. Only then is the append reported done. So the
-//! header ring on disk never names a prepare that is not durable, and a crash
-//! leaves either the old header (the prepare slot may be torn) or the new
-//! header over a whole prepare.
+//! An append goes through these I/Os, each submitted only after the previous
+//! one completed: a prepare of more than one sector first has its first
+//! sector written and made durable with an fsync; the whole prepare is then
+//! written to its slot of the prepare ring and made durable with an fsync;
+//! its header is then copied into the in-memory header ring, and the header
+//! ring's sector that holds it is written and made durable with an fsync.
+//! Only then is the append reported done. So the header ring on disk never
+//! names a prepare that is not durable, and a crash leaves either the old
+//! header (the prepare slot may be torn) or the new header over a whole
+//! prepare. Writing the first sector first means a torn overwrite always
+//! shows the new prepare's header, so recovery can tell it from a damaged
+//! old prepare (document 01, WAL recovery).
 //!
-//! A sector of the header ring holds 16 headers. One header write is in
-//! flight at a time; it carries every header of its sector whose prepare is
-//! durable, so neighbouring appends share it. Appends therefore complete in
-//! any order: a later op's sector may be written before an earlier op's
-//! prepare is durable.
+//! A sector of the header ring holds 16 headers. Headers enter the in-memory
+//! ring in op order, once every earlier op's prepare is durable. One header
+//! write is in flight at a time; it carries every header of its sector in
+//! the ring, so neighbouring appends share it, and the sector of the oldest
+//! header not yet written goes first. So the header ring on disk always
+//! names a prefix of the appended ops, and appends complete in op order.
 //!
 //! The prepare is written from the caller's buffer, without a copy. Every
 //! table is sized when the log is built; an append or a read allocates
@@ -29,8 +35,10 @@ use granite_io::message_pool::Message;
 use granite_io::{Completion, Full, Storage, StorageError, Tag, Zone};
 use std::ops::Range;
 
-const SLOTS: u64 = FORMAT.wal_slot_count;
-const HEADER: usize = FORMAT.header_size as usize;
+pub mod recovery;
+
+pub(crate) const SLOTS: u64 = FORMAT.wal_slot_count;
+pub(crate) const HEADER: usize = FORMAT.header_size as usize;
 const SECTOR: u64 = FORMAT.sector_size;
 /// Headers in one sector of the header ring.
 const PER_SECTOR: u64 = SECTOR / FORMAT.header_size;
@@ -53,12 +61,25 @@ const _: () = assert!(FORMAT.pipeline_depth < SLOTS);
 enum Step {
     /// No append in flight.
     Idle,
+    /// The write of the first sector of a prepare of more than one sector
+    /// is in flight.
+    Leading,
+    /// The first sector is written; its fsync is still to be submitted.
+    Led,
+    /// The first sector's fsync is in flight.
+    LeadSyncing,
+    /// The first sector is durable; the whole prepare's write is still to
+    /// be submitted.
+    Lead,
     /// The prepare write is in flight.
     Writing,
     /// The prepare write completed; its fsync is still to be submitted.
     Written,
     /// The prepare's fsync is in flight.
     Syncing,
+    /// The prepare is durable; its header enters the ring once every earlier
+    /// op's has.
+    Synced,
     /// The prepare is durable and its header is in the ring; the header
     /// write is still to be submitted.
     Durable,
@@ -125,6 +146,9 @@ pub struct Wal {
     /// The header of the append in flight in each slot.
     pending: Vec<u8>,
     steps: Vec<Step>,
+    /// The prepare of each slot between its first-sector write and its
+    /// whole write.
+    held: Vec<Option<Message>>,
     /// Reads in flight per slot.
     reads: Vec<u32>,
     /// The last op appended, and its header checksum: the next prepare's
@@ -133,6 +157,8 @@ pub struct Wal {
     head_checksum: u128,
     /// The lowest op whose append is in flight, or `head + 1`.
     oldest: u64,
+    /// The last op whose header is in the ring.
+    ringed: u64,
     /// The sector-sized buffer of the header write, while it is not in
     /// flight.
     header_buffer: Option<Message>,
@@ -158,10 +184,12 @@ impl Wal {
             ring: vec![0; slots * HEADER],
             pending: vec![0; slots * HEADER],
             steps: vec![Step::Idle; slots],
+            held: (0..slots).map(|_| None).collect(),
             reads: vec![0; slots],
             head,
             head_checksum,
             oldest: head + 1,
+            ringed: head,
             header_buffer: Some(header_buffer),
             header_step: HeaderStep::Idle,
         }
@@ -214,14 +242,15 @@ impl Wal {
         assert_eq!(self.steps[slot as usize], Step::Idle, "one append per slot");
         self.pending[entry(slot)].copy_from_slice(&bytes[..HEADER]);
         let len = u32::try_from(len).expect("a prepare fits in u32");
+        let lead = u64::from(len) > SECTOR;
         io.write(
             self.tag + WRITE + slot,
             Zone::WalPrepares,
             slot * FORMAT.message_size_max,
-            len,
+            if lead { SECTOR as u32 } else { len },
             prepare,
         )?;
-        self.steps[slot as usize] = Step::Writing;
+        self.steps[slot as usize] = if lead { Step::Leading } else { Step::Writing };
         self.head = op;
         self.head_checksum = checksum;
         Ok(())
@@ -236,9 +265,11 @@ impl Wal {
         buffer: Message,
     ) -> Result<(), Refused> {
         let slot = op % SLOTS;
-        let overwriting = matches!(
+        // Until its header is in the ring, the ring names the old op, whose
+        // prepare may already be gone.
+        let overwriting = !matches!(
             self.steps[slot as usize],
-            Step::Writing | Step::Written | Step::Syncing
+            Step::Idle | Step::Durable | Step::HeaderWriting
         );
         let size = match self.header(slot) {
             Some(header) if header.op.get() == op && !overwriting => header.size.get(),
@@ -278,8 +309,16 @@ impl Wal {
                     self.header_step = HeaderStep::Written;
                 } else {
                     let slot = (at - WRITE) as usize;
-                    assert_eq!(self.steps[slot], Step::Writing);
-                    self.steps[slot] = Step::Written;
+                    self.steps[slot] = match self.steps[slot] {
+                        Step::Leading => {
+                            self.held[slot] = Some(buffer);
+                            Step::Led
+                        }
+                        step => {
+                            assert_eq!(step, Step::Writing);
+                            Step::Written
+                        }
+                    };
                 }
             }
             Completion::Fsync { result, .. } if at == HEADER_SYNC => {
@@ -301,11 +340,24 @@ impl Wal {
             }
             Completion::Fsync { result, .. } => {
                 result.expect("a WAL fsync failed");
-                let slot = at - SYNC;
-                assert_eq!(self.steps[slot as usize], Step::Syncing);
-                let range = entry(slot);
-                self.ring[range.clone()].copy_from_slice(&self.pending[range]);
-                self.steps[slot as usize] = Step::Durable;
+                let slot = (at - SYNC) as usize;
+                self.steps[slot] = match self.steps[slot] {
+                    Step::LeadSyncing => Step::Lead,
+                    step => {
+                        assert_eq!(step, Step::Syncing);
+                        Step::Synced
+                    }
+                };
+                while self.ringed < self.head {
+                    let slot = (self.ringed + 1) % SLOTS;
+                    if self.steps[slot as usize] != Step::Synced {
+                        break;
+                    }
+                    let range = entry(slot);
+                    self.ring[range.clone()].copy_from_slice(&self.pending[range]);
+                    self.steps[slot as usize] = Step::Durable;
+                    self.ringed += 1;
+                }
             }
             Completion::Read { buffer, result, .. } => {
                 let slot = at - READ;
@@ -324,18 +376,41 @@ impl Wal {
         self.pump(io);
     }
 
-    /// Submits what is ready: fsyncs of written prepares, then the header
-    /// write or its fsync. [`Wal::complete`] calls it; call it too after
+    /// Submits what is ready: fsyncs of written prepares and first sectors,
+    /// whole writes of prepares whose first sector is durable, then the
+    /// header write or its fsync. [`Wal::complete`] calls it; call it too after
     /// another component's completion, when the backend refused one of these
     /// for lack of room and the log has nothing else in flight.
     pub fn pump<S: Storage>(&mut self, io: &mut S) {
         for op in self.oldest..=self.head {
             let slot = op % SLOTS;
-            if self.steps[slot as usize] == Step::Written {
-                if io.fsync(self.tag + SYNC + slot).is_err() {
-                    return;
+            let at = slot as usize;
+            match self.steps[at] {
+                Step::Written | Step::Led => {
+                    if io.fsync(self.tag + SYNC + slot).is_err() {
+                        return;
+                    }
+                    self.steps[at] = if self.steps[at] == Step::Led {
+                        Step::LeadSyncing
+                    } else {
+                        Step::Syncing
+                    };
                 }
-                self.steps[slot as usize] = Step::Syncing;
+                Step::Lead => {
+                    let prepare = self.held[at].take().expect("a held prepare");
+                    let size = Header::decode(prepare.bytes()).expect("checked").size.get();
+                    let len = size.next_multiple_of(SECTOR as u32);
+                    let offset = slot * FORMAT.message_size_max;
+                    let tag = self.tag + WRITE + slot;
+                    if let Err(Full(prepare)) =
+                        io.write(tag, Zone::WalPrepares, offset, len, prepare)
+                    {
+                        self.held[at] = Some(prepare);
+                        return;
+                    }
+                    self.steps[at] = Step::Writing;
+                }
+                _ => {}
             }
         }
         match self.header_step {

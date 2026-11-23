@@ -6,8 +6,9 @@ bans listed in clippy.toml; this script runs it twice so that tests and
 test-only modules are exempt from them, then checks what clippy cannot: where
 `unsafe` may appear, `usize`/`isize` in `#[repr(C)]` layouts, dependencies
 on random-number crates, unchecked arithmetic and `as` casts in the crates
-that compute replicated state, and names of the clock or the file system's
-free space in the storage crate.
+that compute replicated state, names of the clock or the file system's
+free space in the storage crate, and the engine's crates named in the
+reference model.
 
 Before linting the workspace it lints every file in tools/lint-fixtures/ as
 if it sat at a given path in the repository, and fails unless each banned
@@ -55,6 +56,11 @@ AS_PASS = ["--lib", "--bins", "--locked", "--no-deps", "--", "-D", "warnings", "
 # (docs/01 section 2): it names neither the clock nor the file system's free space.
 STORAGE_CRATE = "crates/storage/src/"
 GROWTH_INPUTS = re.compile(r"\b(?:Time|monotonic|realtime|f?statv?fs)\b")
+
+# The reference model shares no code with the engine (T1.5.3): it names neither the storage, lsm,
+# columnar or shard crate, nor, through `crate::`, the rest of the simulator, which links them all.
+MODEL_DIR = "crates/sim/src/model/"
+ENGINE_NAMES = re.compile(r"\bgranite_(?:storage|lsm|columnar|shard)\b|\bcrate::")
 
 BANS = ["clippy::disallowed_methods", "clippy::disallowed_types", "clippy::disallowed_macros"]
 CLIPPY_PASSES = [
@@ -124,6 +130,14 @@ FIXTURE_CASES = [
         ]
     ]),
     ("growth_inputs.rs", "crates/vsr/src/lib.rs", []),
+    ("model_imports.rs", "crates/sim/src/model/mod.rs", [
+        f"crates/sim/src/model/mod.rs:{line}: `{name}` in the reference model" for line, name in [
+            (4, "granite_storage"), (7, "granite_lsm"), (10, "granite_columnar"), (13, "granite_shard"),
+            (17, "granite_storage"), (21, "granite_lsm"), (22, "crate::"), (22, "granite_columnar"),
+            (23, "granite_shard"),
+        ]
+    ]),
+    ("model_imports.rs", "crates/sim/src/node.rs", []),
     ("io_accepted.rs", "crates/io/src/lib.rs", []),
     ("rand.toml", "crates/io/Cargo.toml", []),
 ]
@@ -170,6 +184,9 @@ def source_violations(path, text):
     if path.startswith(STORAGE_CRATE):
         errors += [f"{path}:{line_of(code, m.start())}: `{m.group(0)}` in the storage crate, whose grid growth "
                    "depends only on the ops applied (docs/01 section 2)" for m in GROWTH_INPUTS.finditer(code)]
+    if path.startswith(MODEL_DIR):
+        errors += [f"{path}:{line_of(code, m.start())}: `{m.group(0)}` in the reference model, which shares no "
+                   "code with the engine (T1.5.3)" for m in ENGINE_NAMES.finditer(code)]
     if path not in UNSAFE_MODULES:
         errors += [f"{path}:{line_of(code, m.start())}: unsafe outside the modules listed in tools/lint.py"
                    for m in re.finditer(r"\bunsafe\b", code)]

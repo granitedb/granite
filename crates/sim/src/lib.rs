@@ -1,6 +1,7 @@
 //! Deterministic simulator, fault injection, checkers and reference model.
 
 pub mod counter;
+pub mod model;
 pub mod network;
 pub mod node;
 pub mod scheduler;

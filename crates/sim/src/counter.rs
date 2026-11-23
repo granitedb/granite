@@ -743,7 +743,7 @@ pub fn swarm(seed: u64) -> Config {
         storage,
         network,
         process,
-        skip_durable_write: false,
+        skip_durable_write: true,
     }
 }
 

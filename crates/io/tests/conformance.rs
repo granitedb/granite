@@ -25,6 +25,18 @@ fn memory_passes_the_conformance_suite() {
     }
 }
 
+/// The network checks alone, as a backend of `Network` without storage runs
+/// them.
+#[test]
+fn memory_passes_the_network_checks_alone() {
+    let pool = MessagePool::new(8);
+    for seed in 0..32 {
+        let mut nodes = pair(seed);
+        granite_io::conformance::run_network(&mut nodes, Memory::poll, &pool);
+    }
+    assert_eq!(pool.counters().in_use, 0);
+}
+
 #[test]
 #[should_panic(expected = "a read buffer is not shared")]
 fn read_into_a_shared_buffer_panics() {

@@ -45,7 +45,7 @@ Tests that open files with `O_DIRECT` put them on the data disk, not in the repo
 - the kernel is the pinned one and at least the minimum, and io_uring is not disabled by `kernel.io_uring_disabled`;
 - `rustc` matches `rust-toolchain.toml`;
 - one sector written to the data disk by `dd oflag=direct,dsync` is opened with both `O_DIRECT` and `O_DSYNC` (checked in an `strace` of the `openat` call) and reads back unchanged with `O_DIRECT`;
-- the io crate's tests pass with their data files on the data disk, including the io_uring backend's storage conformance suite, fault injection, kill and allocation tests;
+- the io crate's tests pass with their data files on the data disk, including the io_uring backend's storage and network conformance suites, fault injection, kill, backpressure, reset and allocation tests;
 - an `strace` of the storage conformance suite on io_uring shows the data file opened with `O_DIRECT` and `O_DSYNC`, and no `read`, `write`, `pread`, `pwrite` or vectored variant on it until it is closed.
 
 ## Changing the image

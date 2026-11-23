@@ -211,7 +211,8 @@ pub trait Network {
     fn connect(&mut self, tag: Tag, to: Peer) -> Result<(), Full<()>>;
     /// Takes the next connection another node opens to this one.
     fn accept(&mut self, tag: Tag) -> Result<(), Full<()>>;
-    /// Sends `buffer[..len]`, `1 <= len <= buffer size`.
+    /// Sends the message in `buffer[..len]`: a valid header whose `size` is
+    /// `len`, then its body.
     fn send(
         &mut self,
         tag: Tag,

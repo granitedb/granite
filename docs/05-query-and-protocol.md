@@ -76,12 +76,52 @@ A received header is rejected, each reason with its own error, when: it is short
 
 ### Bodies
 
-- **Row batches (writes, gets):** each table has a generated fixed-size row struct for its fixed-width columns, followed by (offset, length) slots for variable-length columns pointing into a per-batch heap. A batch is `[count][rows][heap]`. Zero-copy readable; validated once on arrival (lengths, UTF-8, enum values, reserved bits).
-- **Results for writes:** sparse list of `(event index, result code)`; an empty list means every event succeeded.
+- **Row batches (writes, gets):** each table has a fixed-size row struct: its fixed-width columns, and (offset, length) slots for variable-length columns pointing into a per-batch heap. A batch is `[count][rows][heap]`. Zero-copy readable; validated once on arrival (lengths, offsets, UTF-8, enum values, reserved bits, row count). Layout below.
+- **Results for writes:** sparse list of `(event index, result code)`; an empty list means every event succeeded. Layout below.
 - **Column batches (scan and query results):** per column: validity bitmap, values or offsets plus bytes. Layout is Arrow-compatible so the client can expose results as Arrow arrays without copying. Large results stream as several messages with a continuation token.
 - **Programs and plans:** a compact, versioned binary IR. Text syntax exists only in client tooling.
 
 Everything is validated at the boundary: a malformed message is rejected whole with a protocol error and never reaches the state machine.
+
+#### Row batches
+
+A row batch (`granite_protocol::batch`) holds rows of one table; which table is named by the body that carries it (T1.5.1). Integers are little-endian. It is one message body at most, `message_size_max - header_size` bytes:
+
+| Field | Offset | Size | Notes |
+|---|---|---|---|
+| count | 0 | u32 | Rows in the batch, at most `ROWS_MAX` |
+| reserved | 4 | u32 | Must be zero |
+| rows | 8 | count × W | Row structs, back to back |
+| heap | 8 + count × W | to the end | Contents of String and Bytes columns |
+
+A row struct is the row encoding of document 03 section 2.4 without its heap: the table's columns in declaration order, with no padding. A fixed-width column is its storage representation (document 03 section 2.2), Nullable included. A String or Bytes column is a slot of 8 bytes, the u32 offset of its content from the start of the heap, then the u32 length; Nullable puts its flag byte before the slot, and a null is the flag and the slot all zero. LowCardinality(T) is laid out as T. W, the width of the row struct, is the sum of the column widths: the storage width, or 8 (9 under Nullable) for String and Bytes. A table from a valid catalog has W of at least 1 and at most the row limit.
+
+The heap is canonical: contents lie in row order, then column order, back to back, and cover the heap exactly. Each slot therefore starts where the slot before it ended, the first at 0, and the last ends at the end of the batch. A null or an empty content takes no heap bytes; an empty content's slot still holds its offset.
+
+`ROWS_MAX` is 131,040, the result entries that fit in one body, so that the results of every write batch fit in its reply.
+
+`Batch::validate` checks a batch once, on arrival, against its table's layout (`RowLayout`, built once per table from the catalog). The first broken rule rejects the whole batch, so no event of a malformed batch is applied. It checks in this order: the size, the header, then each row and each of its columns in order, then that the heap is covered to its end. A validated batch is read in place: `Batch::row` and `Row::get` return each column as a null, the storage bytes of a fixed-width value, a `&str` or a byte slice, all borrowed from the received bytes, without copying or allocating. The codes are part of the protocol:
+
+| Code | Name | Rule |
+|---|---|---|
+| 1 | `Truncated` | The batch has its 8-byte header; a result list is a whole number of entries. |
+| 2 | `TooLarge` | The batch or result list fits in one message body. |
+| 3 | `ReservedBits` | Every bit of the reserved field is zero. |
+| 4 | `CountTooLarge` | The count is at most `ROWS_MAX`, and count × W bytes of rows follow the header. |
+| 5 | `OffsetBeyondHeap` | Every slot's offset plus its length is within the heap. |
+| 6 | `OverlappingSlots` | No slot starts before the end of the slot before it. |
+| 7 | `HeapGap` | No slot starts after the end of the slot before it, and the last ends at the end of the heap. |
+| 8 | `TooLong` | Every String and Bytes length is at most its column's max. |
+| 9 | `InvalidUtf8` | Every String content is UTF-8. |
+| 10 | `UnknownEnumValue` | Every Enum8 and Enum16 index is a declared value. |
+| 11 | `InvalidValue` | Every other fixed-width value is one some value encodes to: a Nullable flag of 0 with zero bytes after it, or 1; a bool of 0 or 1; a canonical NaN; a decimal mantissa of at most P digits. |
+| 12 | `InvalidResult` | Result entries are in strictly increasing event order, each for an event of the batch, none with code 0. |
+
+Example: the golden batch `crates/protocol/tests/entry.batch` holds two rows of the exchange schema's `entry` table (`schemas/exchange.schema`), whose row struct is 61 bytes: `id` Id128 at 0, `user_id` u64 at 16, `asset` u32 at 24, `kind` Enum8 at 28, `amount` Decimal(38, 18) at 29 and `ref` Id128 at 45. The test `golden_entry_batch` reads it back and encodes the same rows to the same bytes.
+
+#### Results for writes
+
+The result list of a write batch (`granite_protocol::results`) is the whole reply body: one 8-byte entry, the u32 event index and then the u32 result code, for each event that did not succeed, in increasing event order. Code 0 is success and is never listed, so an event without an entry succeeded and an empty list means every event did. The result codes of each operation are its own (document 03 section 7). `Results::validate` checks a list against the event count of its batch, with the codes above.
 
 ### Security
 

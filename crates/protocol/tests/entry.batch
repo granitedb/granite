@@ -1,0 +1,24 @@
+# A row batch of two rows of the `entry` table of schemas/exchange.schema
+# (document 05 section 1, "Row batches"), as hex bytes; `#` starts a comment.
+# Each row struct is 61 bytes: id Id128 (16), user_id u64 (8), asset u32 (4),
+# kind Enum8 (1), amount Decimal(38, 18) as an i128 mantissa (16), ref Id128 (16).
+# The table has no String or Bytes column, so the heap is empty.
+
+02 00 00 00  # count: 2 rows
+00 00 00 00  # reserved
+
+# Row 0, at offset 8: a credit of 100.5 of asset 1 for user 7.
+01 00 00 00 00 00 00 00 00 00 00 1c 2a 5b 93 01  # id
+07 00 00 00 00 00 00 00  # user_id 7
+01 00 00 00  # asset 1
+00  # kind 0, credit
+00 00 c2 36 87 b9 b7 72 05 00 00 00 00 00 00 00  # amount 100.5
+f1 00 00 00 00 00 00 00 00 00 00 1c 2a 5b 93 01  # ref
+
+# Row 1, at offset 69: a debit of 0.25 of asset 1 for user 7.
+02 00 00 00 00 00 00 00 00 00 00 1c 2a 5b 93 01  # id
+07 00 00 00 00 00 00 00  # user_id 7
+01 00 00 00  # asset 1
+01  # kind 1, debit
+00 00 d9 e9 ac 2d 78 03 00 00 00 00 00 00 00 00  # amount 0.25
+f2 00 00 00 00 00 00 00 00 00 00 1c 2a 5b 93 01  # ref

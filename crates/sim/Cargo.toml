@@ -26,3 +26,7 @@ granite-meta.workspace = true
 granite-xshard.workspace = true
 granite-query.workspace = true
 granite-protocol.workspace = true
+
+[dev-dependencies]
+# tests/exchange_entry_batch.rs compiles the exchange schema.
+granite-schemac = { path = "../schemac" }

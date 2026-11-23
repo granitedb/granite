@@ -20,3 +20,7 @@ granite-base.workspace = true
 [target.'cfg(target_os = "linux")'.dependencies]
 io-uring = "0.7.16"
 libc = "0.2"
+
+# The portable backend: libc gives fcntl with F_NOCACHE and F_FULLFSYNC.
+[target.'cfg(target_os = "macos")'.dependencies]
+libc = "0.2"

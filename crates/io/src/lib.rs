@@ -9,6 +9,8 @@ pub mod message_pool;
 pub mod metrics;
 #[cfg(target_os = "linux")]
 pub mod pin;
+#[cfg(target_os = "macos")]
+pub mod portable;
 pub mod traits;
 #[cfg(target_os = "linux")]
 pub mod uring;

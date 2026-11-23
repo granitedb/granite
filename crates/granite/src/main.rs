@@ -13,7 +13,9 @@ Usage: granite <command> [options]
 Commands:
   format     Create a data file for one replica:
              granite format --cluster <id> --group <id> --replica <index> <path>
-  start      Run a node
+  start      Run a node: granite start [--io <backend>]
+             The I/O backend is uring on Linux and portable on macOS;
+             portable is for development only and absent from Linux builds.
   repl       Open an interactive client
   bench      Run the benchmark workloads against a cluster
   version    Print the version
@@ -30,6 +32,9 @@ fn main() -> ExitCode {
     if command == "format" {
         return format(args.collect());
     }
+    if command == "start" {
+        return start(&args.collect::<Vec<_>>());
+    }
     let has_extra_arguments = args.next().is_some();
 
     match command.as_str() {
@@ -45,7 +50,7 @@ fn main() -> ExitCode {
             print!("{USAGE}");
             ExitCode::SUCCESS
         }
-        "start" | "repl" | "bench" => {
+        "repl" | "bench" => {
             eprintln!("granite {command}: not implemented yet");
             ExitCode::from(2)
         }
@@ -55,6 +60,33 @@ fn main() -> ExitCode {
             ExitCode::from(2)
         }
     }
+}
+
+/// The I/O backend of this system, the only one `--io` accepts.
+#[cfg(target_os = "linux")]
+const BACKEND: &str = "uring";
+#[cfg(target_os = "macos")]
+const BACKEND: &str = "portable";
+
+/// `granite start`: chooses the I/O backend, and warns when it is the portable
+/// one. Running the node itself is not implemented yet.
+fn start(args: &[String]) -> ExitCode {
+    let backend = match args {
+        [] => BACKEND,
+        [flag, name] if flag == "--io" => name.as_str(),
+        _ => {
+            eprintln!("granite start: expected [--io <backend>]");
+            return ExitCode::from(2);
+        }
+    };
+    if backend != BACKEND {
+        eprintln!("granite start: unknown I/O backend '{backend}'; this build has '{BACKEND}'");
+        return ExitCode::from(2);
+    }
+    #[cfg(target_os = "macos")]
+    eprintln!("granite start: warning: {}", granite_io::portable::WARNING);
+    eprintln!("granite start: not implemented yet");
+    ExitCode::from(2)
 }
 
 /// `granite format`: creates the data file with its fixed zones and an empty

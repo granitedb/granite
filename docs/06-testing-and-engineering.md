@@ -66,8 +66,20 @@ The model is completion-based. A storage or network call only submits; its resul
 
 Backends:
 - **io_uring** (production, Linux): registered buffers and files, direct I/O, one ring per shard.
-- **portable** (development, macOS): blocking or kqueue-based; correctness only, not performance.
+- **portable** (development, macOS only, `granite_io::portable`): `pread`, `pwrite` and non-blocking sockets driven by `poll`, with connects on a helper thread; correctness only, never benchmarked or deployed. Linux builds do not contain it, so no production build can select it, and `granite start` warns that it is unsupported in production. Tests that run on one system only are listed, with reasons, in `crates/io/tests/skipped.md`.
 - **simulated**: in-memory disk and network with a virtual clock.
+
+How durable a completed operation is differs between the two real backends:
+
+| | io_uring (Linux) | portable (macOS) |
+|---|---|---|
+| Data file opened with | `O_DIRECT \| O_DSYNC` | `F_NOCACHE` |
+| A completed write | is on stable storage: `O_DSYNC` makes each write durable, flushing the drive's cache or writing through it | is not durable: it may be in the drive's volatile cache, or in the page cache, as `F_NOCACHE` is only a hint the kernel may ignore |
+| A completed fsync | makes every write completed before it durable (`fsync`) | the same, by `fcntl(F_FULLFSYNC)`, which asks the drive to flush its cache; plain `fsync` on macOS stops short of the drive's cache. Some external and network drives ignore the request |
+| A completed write after `SIGKILL` of the process | survives, and a test shows it (`completed_writes_survive_sigkill`) | survives, as the kernel already holds it; not tested |
+| Power loss | survives once its write or fsync completed; not tested yet (section 0) | survives only once a later fsync completed, and only if the drive honours `F_FULLFSYNC` |
+
+Code that is correct against the trait contract (a write is durable after a later fsync) is correct on both; the portable backend only removes the margin the io_uring backend gives a write between its completion and the next fsync.
 
 The state machine itself takes no `Io`: it is a pure function of (state, op), which is what makes replicas converge.
 

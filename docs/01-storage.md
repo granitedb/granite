@@ -95,10 +95,60 @@ Open reads the four copies. A copy counts for its position only if its checksum 
 
 - A prepare is header plus body. The header contains the checksum of the body, the checksum of the header itself, and the checksum of the previous prepare's header (hash chain).
 - Slot index = op number mod slot count. A prepare is written to the prepare ring first, then its header to the header ring. The redundant header ring lets recovery tell a torn write (header ring has the old header, prepare slot is garbage) from corruption (header ring says the prepare should be valid).
-- An append (`granite_storage::wal`) takes four I/Os, each submitted only after the previous one completed: the prepare is written to its slot from the caller's buffer, without a copy, and made durable with an fsync; its header then enters the in-memory copy of the header ring, whose sector holding it (16 headers) is written and made durable with an fsync. Only then is the append reported complete. So the header ring on disk never names a prepare that is not durable. One header write is in flight at a time and carries every header of its sector whose prepare is durable, so appends complete in any order, and the header ring may hold a later op's header before an earlier one's. A prepare is written up to the end of its last sector, and the bytes after its body must be zero, so the slot content is a function of the prepare.
+- An append (`granite_storage::wal`) takes these I/Os, each submitted only after the previous one completed. A prepare of more than one sector first has its first sector, which holds its header, written and made durable with an fsync. The whole prepare is then written to its slot from the caller's buffer, without a copy, and made durable with an fsync. Its header then enters the in-memory copy of the header ring, whose sector holding it (16 headers) is written and made durable with an fsync. Only then is the append reported complete. So the header ring on disk never names a prepare that is not durable, and a write that tears over a slot always leaves the new prepare's header there if it leaves any of its sectors (recovery, below, depends on this). A prepare is written up to the end of its last sector, and the bytes after its body must be zero, so the slot content is a function of the prepare.
+- Headers enter the in-memory header ring in op order: an op's header waits until every earlier op's prepare is durable. One header write is in flight at a time; it carries every header of its sector in the ring, and the sector of the oldest header not yet written goes first. So the header ring on disk always names a prefix of the appended ops, and appends complete in op order, as VRR §4.1 has a backup acknowledge. The first-sector write costs one more write and fsync per prepare of more than one sector; with `O_DSYNC` both of a prepare's fsyncs are redundant on Linux, which the phase-1 benchmarks decide.
 - The append checks that the prepare's op follows the last one and that its parent is the last header's checksum; a prepare that breaks the chain is a bug in the caller and stops the process. A failed write or fsync stops the process too (decision 0003). At most the pipeline depth of appends are in flight; beyond that, and while a read of the slot is in flight, an append is refused and handed back, which is the caller's backpressure.
 - A read by op is answered from the in-memory header ring: an op that a later op overwrote, or is overwriting, is not present, without any I/O. Otherwise the prepare slot is read and must hold a valid header with the checksum the ring holds for that op, and a body that matches it; each failure, and a failed read, is its own typed error, and the bytes are not returned.
-- Recovery classifies each slot as: clean, torn, corrupt, or missing. Torn tails are safe to truncate. Corrupt committed slots are repaired from peers. This distinction is the core of protocol-aware recovery and must be verified against Alagappan et al., FAST 2018.
+
+#### WAL recovery
+
+Recovery (`granite_storage::wal::recovery`) reads the header ring once, takes the head from it, then reads every prepare slot once, as far as the prepare the header ring names reaches or one sector, and classifies each slot. A prepare other than the named one is classified by its header alone. It fetches nothing: it reports what needs repair from peers (T2.2.4) and whether the head is uncertain (`recovering_head`, T2.2.5). A failed read counts as damage, of every entry for the header ring.
+
+- A header ring entry is *zeros*, *valid* (a prepare header whose op maps to the slot, op 1 or later) or *damaged* (anything else, including a valid header of another slot, which is a misdirected write).
+- A prepare slot is *zeros* (its header bytes are zero), *whole* (a valid prepare header that maps to the slot, and a body that matches it) or damaged, with or without a valid header that maps to the slot.
+- The **head** is the highest op the header ring names, or 0 when it names none. Because the header ring on disk is a prefix of the appended ops, every op up to the head was appended, and each slot's op is the highest op up to the head that maps to it, if any.
+- The head is **uncertain** when the header ring entry of the slot that the op after the head maps to is damaged: that op may have been appended and acknowledged. A damaged entry anywhere else cannot hide a later op, since the prefix would then include the op after the head. A corrupt slot below the head does not make the head uncertain (document 02 section 5).
+- Every **corrupt** slot to which an op up to the head maps needs repair: that op, with its header checksum when the header ring still holds it (the hash chain gives it otherwise).
+
+| Row | Header ring entry | Prepare slot | Class |
+|---|---|---|---|
+| 1 | zeros, and no op up to the head maps to the slot | zeros | missing |
+| 2 | zeros, and no op up to the head maps to the slot | anything else | torn |
+| 3 | zeros, and an op up to the head maps to the slot | anything | corrupt |
+| 4 | damaged | anything | corrupt |
+| 5 | valid, an older op than the slot's op | anything | corrupt |
+| 6 | valid, the slot's op | that prepare whole (same header checksum) | clean |
+| 7 | valid, the slot's op | a valid header of an op beyond the head, body whole or not | torn |
+| 8 | valid, the slot's op | that op's header with a damaged body | corrupt |
+| 9 | valid, the slot's op | damaged header | corrupt |
+| 10 | valid, the slot's op | zeros | corrupt |
+| 11 | valid, the slot's op | another valid prepare, of an op up to the head | corrupt |
+
+*Missing* means nothing was ever appended to the slot. *Torn* means an append of an op beyond the head that a crash interrupted: it was never acknowledged, so it is discarded, and an assertion checks that a torn slot's op is beyond the head. *Corrupt* means the header ring names, or may name, a prepare that the slot does not hold whole: it may be committed and is repaired. Each row has a test in `crates/sim/tests/wal_recovery.rs` that writes that state to a simulated disk.
+
+Why a crash alone never yields a corrupt slot: the header ring is a prefix (so rows 3 and 5 need a lost or misdirected header write), a header is written only over a durable prepare (rows 8 to 10 need damage or a lost write), and a torn overwrite leaves either the old prepare whole (row 6) or the new prepare's header (row 7, never row 8). Why damage alone never yields a torn slot: a slot is torn only when no op up to the head maps to it (row 2, a slot the log never completed an append to) or when it holds the header of an op beyond the head (row 7); damage cannot create a valid header, and the head and the header ring are what the log wrote. Seed gates in the same test file check both with 10,000 seeds.
+
+Checked against Alagappan et al., "Protocol-Aware Recovery for Consensus-Based Storage", FAST 2018 (PAR; sections 2.3 and 3, see [02a](02a-replication-sources.md)). The header ring entry is PAR's persist record and identifier together: written after the entry, stored apart from it, checksummed and small enough to land whole (PAR §3.3.3, §3.3.4).
+
+| Row | PAR |
+|---|---|
+| 1 | No counterpart: PAR's log is a preallocated file appended at its end, so an unused part is never read as an entry. |
+| 2 | §3.3.3, ordered update: an entry without its persist record means a crash during the update, and the entry is discarded, which is safe because it was never acknowledged. |
+| 3, 5 | No counterpart; see difference 4. |
+| 4 | §3.3.3: a damaged persist record means corruption, not a crash. |
+| 6 | §3.3.2: an item that matches its checksum is not faulty. |
+| 7 | §3.3.3, ordered update: the newer entry has no persist record, so the crash case. |
+| 8, 9, 10 | §3.3.3, ordered update: a mismatch while the persist record is present means corruption. |
+| 11 | §3.3.4: the identifier, stored apart from the item, shows that the item is not the one recorded (a lost or misdirected write). |
+
+Differences from PAR:
+
+1. **Ordering.** PAR's log does not order an entry before its persist record (write both, then one fsync) and so cannot tell a crash from corruption for the last entry; it marks that entry corrupt and leaves it to the distributed protocol (PAR §3.3.3). We use the ordered update that PAR describes first, at the cost of an fsync between the prepare and its header, so no entry is ambiguous and the head is uncertain only when the header ring itself is damaged.
+2. **A ring, overwritten in place.** PAR's log is appended; ours reuses slots. A torn overwrite that left the old header sector and some new body sectors would look exactly like a damaged old prepare. Writing the first sector first (WAL above) rules that state out; PAR has no counterpart.
+3. **Later entries.** PAR also concludes corruption when the next entry or its persist record is present (§3.3.3). We do not look at later entries; the position of a slot's op against the head plays that role, and is exact because headers are written in op order.
+4. **Lost and misdirected header writes** (rows 3 and 5). PAR counts lost and misdirected writes among the causes of corrupted data (§3.1, Table 2) and catches them by the checksum and the identifier kept apart (§3.3.4), but does not discuss a lost write of the persist record itself, which in its log would look like a crash. Here a header entry that should hold the slot's op, by the prefix, but is zeros or older can only be such a write, so the slot is corrupt. A lost write of the head's own header entry cannot be seen locally: recovery then takes the op before as the head and treats the acknowledged op as torn or absent. Replication covers it as it covers a lost replica, and the headers the superblock keeps with the log view (document 02 section 4) bound it; it stays a known limit of local recovery.
+5. **Item and identifier both damaged.** PAR crashes the node (§3.3.4). We classify the slot corrupt and repair it: a slot's position and the head identify the op, so no identifier is needed to name it, except in the slot after the head, which makes the head uncertain instead.
+6. **Snapshots and metadata.** PAR's renamed temporary files have no ambiguity (§3.3.3); ours are the grid and the superblock, whose 4 copies and quorum rule are above.
 
 ### Grid
 
@@ -239,7 +289,6 @@ All pools sized at startup from configuration: block cache, memtable arenas, com
 
 ## 9. To verify before implementation
 
-- Protocol-aware recovery slot classification rules (Alagappan et al., FAST 2018).
 - TigerBeetle's free-set reservation scheme and compaction pacing ("beats" and "bars"), as a reference for deterministic allocation.
 - Gate G1 experiment, redefined: for tables of 20, 50 and 100 columns at about 1 KiB per row, with point reads uniformly distributed over data of all ages, measure point-read latency, write amplification, space and scan speed for the `row`, `columnar` and a two-group layout. The outcome sets the recommended layout per workload and the chunk byte targets, and tells us whether the columnar projection is needed earlier than phase 6.
 - Filter memory at scale: bits per key against cache budget for a shard holding billions of rows.

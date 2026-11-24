@@ -239,11 +239,71 @@ struct Op {
     access: Option<Access>,
 }
 
+/// Bytes of a zone allocated together, on the first write to them.
+const CHUNK: usize = 16 * SECTOR_SIZE;
+
+/// The bytes of a zone, allocated a chunk at a time on the first write to
+/// it; an untouched chunk reads as zeros. A zone as large as the WAL's is
+/// then cheap to build, which a seed does several times.
+struct Sparse {
+    len: u64,
+    chunks: Vec<Option<Box<[u8]>>>,
+}
+
+impl Sparse {
+    fn new(len: u64) -> Self {
+        let chunks = usize::try_from(len.div_ceil(CHUNK as u64)).unwrap();
+        Sparse {
+            len,
+            chunks: (0..chunks).map(|_| None).collect(),
+        }
+    }
+
+    fn read(&self, offset: u64, out: &mut [u8]) {
+        self.check(offset, out.len());
+        spans(offset, out.len(), |c, chunk, span| match &self.chunks[c] {
+            Some(bytes) => out[span].copy_from_slice(&bytes[chunk]),
+            None => out[span].fill(0),
+        });
+    }
+
+    fn write(&mut self, offset: u64, bytes: &[u8]) {
+        self.check(offset, bytes.len());
+        spans(offset, bytes.len(), |c, chunk, span| {
+            let stored = self.chunks[c].get_or_insert_with(|| vec![0; CHUNK].into_boxed_slice());
+            stored[chunk].copy_from_slice(&bytes[span]);
+        });
+    }
+
+    fn flip(&mut self, byte: u64, mask: u8) {
+        let mut value = [0];
+        self.read(byte, &mut value);
+        self.write(byte, &[value[0] ^ mask]);
+    }
+
+    fn check(&self, offset: u64, len: usize) {
+        assert!(offset + len as u64 <= self.len, "inside the zone");
+    }
+}
+
+/// Calls `f` with each chunk that `len` bytes at `offset` touch, the range
+/// of that chunk, and the matching range of the `len` bytes.
+fn spans(offset: u64, len: usize, mut f: impl FnMut(usize, Range<usize>, Range<usize>)) {
+    let mut done = 0;
+    while done < len {
+        let at = usize::try_from(offset).unwrap() + done;
+        let within = at % CHUNK;
+        let n = (CHUNK - within).min(len - done);
+        f(at / CHUNK, within..within + n, done..done + n);
+        done += n;
+    }
+}
+
 /// The data file of one replica of a [`Group`].
 pub struct Disk {
     group: Group,
     replica: usize,
-    zones: [Vec<u8>; 4],
+    zones: [Sparse; 4],
     capacity: usize,
     in_flight: Vec<Op>,
     log: Vec<Fault>,
@@ -280,7 +340,7 @@ impl Disk {
         Disk {
             group: group.clone(),
             replica,
-            zones: sizes.map(|size| vec![0; usize::try_from(size).unwrap()]),
+            zones: sizes.map(Sparse::new),
             capacity,
             // Sized up front, so that a running disk allocates nothing.
             in_flight: Vec::with_capacity(capacity),
@@ -426,8 +486,7 @@ impl Disk {
 
     /// Writes `bytes` at `offset` as the process asked.
     fn store(&mut self, zone: Zone, offset: u64, bytes: &[u8]) {
-        let start = offset as usize;
-        self.zones[zone as usize][start..start + bytes.len()].copy_from_slice(bytes);
+        self.zones[zone as usize].write(offset, bytes);
         self.mark(zone, offset, bytes.len() as u64, false);
     }
 
@@ -474,7 +533,7 @@ impl Disk {
             let bit = self.random.next_u64() % (size * 8);
             let byte = offset + bit / 8;
             if self.allows(zone, byte, 1) {
-                self.zones[zone as usize][byte as usize] ^= 1 << (bit % 8);
+                self.zones[zone as usize].flip(byte, 1 << (bit % 8));
                 self.mark(zone, byte / SECTOR * SECTOR, SECTOR, true);
                 self.record(FaultKind::BitFlip { bit }, Some(access));
             }
@@ -496,19 +555,18 @@ impl Disk {
             return Err(StorageError);
         }
         let len = access.len as usize;
-        let source = &self.zones[access.zone as usize][from as usize..from as usize + len];
         let bytes = access
             .buffer
             .bytes_mut()
             .expect("a read buffer is not shared");
-        bytes[..len].copy_from_slice(source);
+        self.zones[access.zone as usize].read(from, &mut bytes[..len]);
         Ok(())
     }
 }
 
 impl Storage for Disk {
     fn size(&self, zone: Zone) -> u64 {
-        self.zones[zone as usize].len() as u64
+        self.zones[zone as usize].len
     }
 
     fn read(

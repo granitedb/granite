@@ -39,6 +39,11 @@ impl GridSize {
         self.size
     }
 
+    /// The group's size limit in bytes.
+    pub fn limit(&self) -> u64 {
+        self.limit
+    }
+
     /// Size in blocks.
     pub fn blocks(&self) -> u64 {
         self.size / FORMAT.grid_block_size

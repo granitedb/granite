@@ -87,6 +87,10 @@ impl Storage for Io {
     fn fsync(&mut self, tag: Tag) -> Result<(), Full<()>> {
         self.disk.fsync(tag)
     }
+
+    fn grow_grid(&mut self, tag: Tag, size: u64) -> Result<(), Full<()>> {
+        self.disk.grow_grid(tag, size)
+    }
 }
 
 fn io(sim: &mut Scheduler<()>, faults: Faults, capacity: usize, misdirect: Option<u64>) -> Io {

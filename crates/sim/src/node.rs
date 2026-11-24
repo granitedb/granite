@@ -60,6 +60,7 @@ pub enum Op {
     Read,
     Write,
     Fsync,
+    Grow,
     Connect,
     Accept,
     Send,
@@ -215,6 +216,7 @@ pub(crate) fn op(completion: &Completion) -> Op {
         Completion::Read { .. } => Op::Read,
         Completion::Write { .. } => Op::Write,
         Completion::Fsync { .. } => Op::Fsync,
+        Completion::Grown { .. } => Op::Grow,
         Completion::Connected { .. } => Op::Connect,
         Completion::Accepted { .. } => Op::Accept,
         Completion::Sent { .. } => Op::Send,
@@ -270,6 +272,16 @@ impl Storage for Node {
         }
         self.disk.fsync(tag)?;
         self.submitted(Op::Fsync);
+        Ok(())
+    }
+
+    #[track_caller]
+    fn grow_grid(&mut self, tag: Tag, size: u64) -> Result<(), Full<()>> {
+        if self.down {
+            return Ok(());
+        }
+        self.disk.grow_grid(tag, size)?;
+        self.submitted(Op::Grow);
         Ok(())
     }
 }

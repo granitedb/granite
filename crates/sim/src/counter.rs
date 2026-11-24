@@ -330,6 +330,7 @@ impl Replica {
                 self.value = Some(self.durable);
                 self.flush(io, pool);
             }
+            Completion::Grown { .. } => unreachable!("the toy never grows its grid"),
             Completion::Accepted { result, .. } => {
                 self.accepting = false;
                 if let Ok(connection) = result {

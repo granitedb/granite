@@ -88,6 +88,40 @@ fn portable_passes_the_storage_conformance_suite() {
     let pool = MessagePool::new(4);
     let mut storage = scratch.open("data", 8);
     conformance::run_storage(&mut storage, Portable::poll, &pool);
+    drop(storage);
+    // The suite grows the grid by two sectors; the file grew with it.
+    let zones = 16 * SECTOR + 2 * MESSAGE_SIZE as u64;
+    let metadata = std::fs::metadata(scratch.0.join("data")).unwrap();
+    assert_eq!(metadata.len(), zones + 2 * SECTOR);
+}
+
+/// A grown grid is allocated, not a hole, so a later write cannot fail for
+/// lack of space.
+#[test]
+fn a_grown_grid_is_allocated() {
+    use granite_io::{Storage, Zone};
+    use std::os::unix::fs::MetadataExt;
+    let scratch = Scratch::new("grow");
+    let path = scratch.0.join("data");
+    let mut storage = Portable::open(&path, [SECTOR, SECTOR, SECTOR, 0], 1).unwrap();
+    let size = 64 << 20;
+    storage.grow_grid(1, size).unwrap();
+    assert!(matches!(
+        wait(&mut storage),
+        Completion::Grown {
+            tag: 1,
+            result: Ok(())
+        }
+    ));
+    assert_eq!(storage.size(Zone::Grid), size);
+    let metadata = std::fs::metadata(&path).unwrap();
+    assert_eq!(metadata.len(), 3 * SECTOR + size);
+    assert!(
+        // st_blocks counts 512-byte units.
+        metadata.blocks() >= size >> 9,
+        "{} blocks",
+        metadata.blocks()
+    );
 }
 
 #[test]

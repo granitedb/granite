@@ -111,6 +111,10 @@ fn uring_passes_the_storage_conformance_suite() {
     let zones = [4 * SECTOR, 4 * SECTOR, 8 * SECTOR, 2 * MESSAGE_SIZE as u64];
     let mut storage = open(&scratch.data(), zones, 8, &pool);
     granite_io::conformance::run_storage(&mut storage, Uring::poll, &pool);
+    drop(storage);
+    // The suite grows the grid by two sectors; the file grew with it.
+    let len = std::fs::metadata(scratch.data()).unwrap().len();
+    assert_eq!(len, zones.iter().sum::<u64>() + 2 * SECTOR);
 }
 
 /// Grid sectors the child of the kill test writes, one each, in order.

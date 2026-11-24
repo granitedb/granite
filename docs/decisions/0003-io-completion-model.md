@@ -10,7 +10,7 @@ All production code reaches the disk, the network, the clock and randomness thro
 
 `crates/io/src/traits.rs`; its module documentation is the reference.
 
-- **`Storage`**: `size(zone)`, `read(tag, zone, offset, len, buffer)`, `write(tag, zone, offset, len, buffer)`, `fsync(tag)`. A `Zone` is one of the fixed zones of document 01 section 2 (superblock, WAL headers, WAL prepares, grid); offsets are relative to it. Offsets and lengths are whole sectors.
+- **`Storage`**: `size(zone)`, `read(tag, zone, offset, len, buffer)`, `write(tag, zone, offset, len, buffer)`, `fsync(tag)`, `grow_grid(tag, size)`. A `Zone` is one of the fixed zones of document 01 section 2 (superblock, WAL headers, WAL prepares, grid); offsets are relative to it. Offsets and lengths are whole sectors. `grow_grid` extends the grid, the last zone, to `size` bytes with the space allocated (`fallocate` on Linux, `F_PREALLOCATE` on macOS) and durable, and changes nothing if the zone is already that large; it was added with the free set (T1.1.6), because the grid grows in steps while the replica runs (document 01 section 2).
 - **`Network`**: `connect(tag, to)`, `accept(tag)`, `send(tag, connection, len, buffer)`, `recv(tag, connection, buffer)` and `close(connection)`. A peer is a configured id, `Peer(u64)`, that the backend resolves to an address; a connection is an opaque `Connection(u64)`. The backend frames messages with the header's size field, so a receive completes with one whole message; on one connection, messages arrive in the order they were sent and fill posted buffers in the order those were posted.
 - **`Time`**: `monotonic()` and `realtime()`, in nanoseconds as integers.
 - **`Random`**: `next_u64()`, seeded, used only outside the state machine.
@@ -22,7 +22,7 @@ All production code reaches the disk, the network, the clock and randomness thro
 
 | Call | Completes |
 |---|---|
-| `read`, `write`, `fsync`, `connect`, `accept`, `send`, `recv` | Never inside the call. The result comes only from a later `poll`, even when a backend could finish at once (the in-memory backend copies at submission and still queues the completion). A refusal, `Err(Full(..))`, is synchronous and means the operation was not submitted. |
+| `read`, `write`, `fsync`, `grow_grid`, `connect`, `accept`, `send`, `recv` | Never inside the call. The result comes only from a later `poll`, even when a backend could finish at once (the in-memory backend copies at submission and still queues the completion). A refusal, `Err(Full(..))`, is synchronous and means the operation was not submitted. |
 | `size`, `close`, `monotonic`, `realtime`, `next_u64`, `poll` | Always, without blocking. `poll` returns `None` when nothing has completed. `close` completes nothing itself: the operations in flight on the connection complete later, with `Closed` unless they finished first. |
 
 Never completing inside the call means no handler runs while its caller is half way through an update, and the simulator can crash a node between any submission and its completion.
@@ -31,7 +31,7 @@ Never completing inside the call means no handler runs while its caller is half 
 
 **Backpressure.** A backend holds a fixed number of operations in flight; one more is refused with `Full`, which returns what was submitted. A node that posts no receive buffer on a connection reads nothing from it, which pushes back on its sender. The number of open connections is bounded too; one more is refused with `NetworkError::Refused`.
 
-**Errors.** Every storage completion carries `Result<_, StorageError>` (`EIO` and the like), and every network completion `Result<_, NetworkError>`: `Refused`, `TimedOut`, `Reset` (the peer closed or reset the connection, or is gone) or `Closed` (this side closed it). A connection failure, a reset and a timeout therefore reach the caller as completions (T0.3.3). What to do is the caller's: a failed read is repaired from a peer; after a failed write or fsync the data's state is unknown, and a later fsync that succeeds does not prove it durable, because the kernel may have dropped the dirty pages, so `storage` will stop the process and let replication absorb the lost node.
+**Errors.** Every storage completion carries `Result<_, StorageError>` (`EIO` and the like), and every network completion `Result<_, NetworkError>`: `Refused`, `TimedOut`, `Reset` (the peer closed or reset the connection, or is gone) or `Closed` (this side closed it). A connection failure, a reset and a timeout therefore reach the caller as completions (T0.3.3). What to do is the caller's: a failed read is repaired from a peer; after a failed write, fsync or growth the data's state is unknown, and a later fsync that succeeds does not prove it durable, because the kernel may have dropped the dirty pages, so `storage` will stop the process and let replication absorb the lost node.
 
 ### Differences from the sketch in document 06
 

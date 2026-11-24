@@ -129,6 +129,7 @@ pub struct Group(Rc<RefCell<GroupState>>);
 
 struct GroupState {
     quorum: usize,
+    /// The sizes each disk starts with; the grid grows per disk.
     zone_sizes: [u64; 4],
     /// Per replica, per zone, per sector: holds content its process did not
     /// write.
@@ -213,10 +214,10 @@ impl GroupState {
         };
         zones.iter().any(|&zone| {
             let size = unit_size(zone);
-            let sectors = self.zone_sizes[zone as usize] / SECTOR;
+            let flags = &self.corrupt[replica][zone as usize];
+            let sectors = flags.len() as u64;
             let start = (index * size / SECTOR).min(sectors);
             let end = ((index + 1) * size).div_ceil(SECTOR).min(sectors);
-            let flags = &self.corrupt[replica][zone as usize];
             flags[usize::try_from(start).unwrap()..usize::try_from(end).unwrap()].contains(&true)
         })
     }
@@ -235,8 +236,10 @@ struct Op {
     tag: Tag,
     /// Virtual time from which it may complete.
     ready: u64,
-    /// `None` for an fsync.
+    /// `None` for an fsync or a growth.
     access: Option<Access>,
+    /// The grid's new size, for a growth.
+    grow: Option<u64>,
 }
 
 /// The data file of one replica of a [`Group`].
@@ -303,7 +306,16 @@ impl Disk {
             .filter(|&i| self.in_flight[i].ready <= now)
             .nth(pick)
             .expect("picked among the due");
-        let Op { tag, access, .. } = self.in_flight.swap_remove(index);
+        let Op {
+            tag, access, grow, ..
+        } = self.in_flight.swap_remove(index);
+        if let Some(size) = grow {
+            self.grow(size);
+            return Some(Completion::Grown {
+                tag,
+                result: Ok(()),
+            });
+        }
         let Some(mut access) = access else {
             return Some(Completion::Fsync {
                 tag,
@@ -382,7 +394,17 @@ impl Disk {
         });
     }
 
-    fn submit(&mut self, tag: Tag, access: Option<Access>) {
+    /// Makes the grid at least `size` bytes, zeros after what it held.
+    fn grow(&mut self, size: u64) {
+        let grid = Zone::Grid as usize;
+        if size > self.size(Zone::Grid) {
+            self.zones[grid] = granite_io::memory::grown(&self.zones[grid], size);
+            let sectors = usize::try_from(size / SECTOR).unwrap();
+            self.group.0.borrow_mut().corrupt[self.replica][grid].resize(sectors, false);
+        }
+    }
+
+    fn submit(&mut self, tag: Tag, access: Option<Access>, grow: Option<u64>) {
         assert!(self.in_flight.len() < self.capacity);
         let mut ready = self.clock.monotonic();
         if self.roll() < u64::from(self.faults.latency) {
@@ -390,7 +412,12 @@ impl Disk {
             ready += delay;
             self.record(FaultKind::Latency { delay }, access.as_ref());
         }
-        self.in_flight.push(Op { tag, ready, access });
+        self.in_flight.push(Op {
+            tag,
+            ready,
+            access,
+            grow,
+        });
     }
 
     /// Checks the storage preconditions against the operations in flight.
@@ -531,7 +558,7 @@ impl Storage for Disk {
             len,
             buffer,
         };
-        self.submit(tag, Some(access));
+        self.submit(tag, Some(access), None);
         Ok(())
     }
 
@@ -554,7 +581,7 @@ impl Storage for Disk {
             len,
             buffer,
         };
-        self.submit(tag, Some(access));
+        self.submit(tag, Some(access), None);
         Ok(())
     }
 
@@ -562,7 +589,17 @@ impl Storage for Disk {
         if self.in_flight.len() == self.capacity {
             return Err(Full(()));
         }
-        self.submit(tag, None);
+        self.submit(tag, None, None);
+        Ok(())
+    }
+
+    /// The growth lands when it completes: a crash before keeps the old size.
+    fn grow_grid(&mut self, tag: Tag, size: u64) -> Result<(), Full<()>> {
+        assert!(size.is_multiple_of(SECTOR));
+        if self.in_flight.len() == self.capacity {
+            return Err(Full(()));
+        }
+        self.submit(tag, None, Some(size));
         Ok(())
     }
 }

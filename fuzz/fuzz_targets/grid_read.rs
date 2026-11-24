@@ -70,6 +70,9 @@ impl Storage for Device {
     fn fsync(&mut self, _: Tag) -> Result<(), Full<()>> {
         unreachable!("the grid does not fsync")
     }
+    fn grow_grid(&mut self, _: Tag, _: u64) -> Result<(), Full<()>> {
+        unreachable!("the grid does not grow its zone")
+    }
 }
 
 /// Writes a block of `kind` to `address` whose content starts with `fill`,

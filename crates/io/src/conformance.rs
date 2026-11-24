@@ -46,6 +46,7 @@ pub fn run_storage<S: Storage>(
     completes_once(storage, &mut poll, pool);
     full_returns_the_submission(storage, &mut poll, pool);
     many_in_flight(storage, &mut poll, pool);
+    grid_grows(storage, &mut poll, pool);
     assert!(
         poll(storage).is_none(),
         "no completion beyond the submitted ones"
@@ -212,6 +213,54 @@ where
             result: Ok(())
         }]
     ));
+}
+
+/// Growing the grid by two sectors keeps what it held and adds zeros that
+/// take writes; a smaller size changes nothing. Each growth completes once.
+fn grid_grows<S, P>(storage: &mut S, poll: &mut P, pool: &MessagePool)
+where
+    S: Storage,
+    P: FnMut(&mut S) -> Option<Completion>,
+{
+    let sector = SECTOR_SIZE as u64;
+    let old = storage.size(Zone::Grid);
+    let transfer = |storage: &mut S, poll: &mut P, write: bool, offset: u64, byte: u8| {
+        let buffer = filled(pool, byte);
+        if write {
+            storage.write(4, Zone::Grid, offset, sector as u32, buffer)
+        } else {
+            storage.read(4, Zone::Grid, offset, sector as u32, buffer)
+        }
+        .expect("room");
+        match drain(storage, poll, 1).pop() {
+            Some(
+                Completion::Write { buffer, result, .. } | Completion::Read { buffer, result, .. },
+            ) => {
+                result.expect("the transfer succeeded");
+                buffer.bytes()[..sector as usize].iter().all(|&b| b == byte)
+            }
+            _ => panic!("expected the transfer's completion"),
+        }
+    };
+    let grow = |storage: &mut S, poll: &mut P, size: u64| {
+        storage.grow_grid(5, size).expect("room");
+        let [Completion::Grown { tag: 5, result }] = &drain(storage, poll, 1)[..] else {
+            panic!("expected the growth's completion");
+        };
+        result.expect("the grid grew");
+    };
+    transfer(storage, poll, true, old - sector, 0xc3);
+    grow(storage, poll, old + 2 * sector);
+    assert_eq!(storage.size(Zone::Grid), old + 2 * sector);
+    assert!(transfer(storage, poll, false, old - sector, 0xc3), "kept");
+    assert!(transfer(storage, poll, false, old + sector, 0), "zeros");
+    transfer(storage, poll, true, old + sector, 0xd4);
+    assert!(
+        transfer(storage, poll, false, old + sector, 0xd4),
+        "written"
+    );
+    grow(storage, poll, old);
+    assert_eq!(storage.size(Zone::Grid), old + 2 * sector, "never shrinks");
 }
 
 fn completes_once<S, P>(storage: &mut S, poll: &mut P, pool: &MessagePool)

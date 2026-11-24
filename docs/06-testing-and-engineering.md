@@ -55,7 +55,7 @@ The simulator is the primary correctness tool and is built before the things it 
 All production code reaches the outside world only through these traits (`crates/io/src/traits.rs`):
 
 ```rust
-trait Storage  { size(zone), read(tag, zone, offset, len, buf), write(tag, zone, offset, len, buf), fsync(tag) }
+trait Storage  { size(zone), read(tag, zone, offset, len, buf), write(tag, zone, offset, len, buf), fsync(tag), grow_grid(tag, size) }
 trait Network  { connect(tag, peer), accept(tag), send(tag, conn, len, buf), recv(tag, conn, buf), close(conn) }
 trait Time     { monotonic(), realtime() }                 // nanoseconds
 trait Random   { next_u64() }                              // seeded, used only outside the state machine

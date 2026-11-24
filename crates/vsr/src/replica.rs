@@ -468,7 +468,10 @@ impl<I: Io, S: StateMachine> Tasks<I> for Replica<'_, S> {
                     io.close(connection); // The next tick reconnects.
                 }
             }
-            Completion::Read { .. } | Completion::Write { .. } | Completion::Fsync { .. } => {
+            Completion::Read { .. }
+            | Completion::Write { .. }
+            | Completion::Fsync { .. }
+            | Completion::Grown { .. } => {
                 unreachable!("the replica submits no storage operation yet")
             }
         }

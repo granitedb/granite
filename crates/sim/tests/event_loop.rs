@@ -70,6 +70,10 @@ impl Storage for Node {
     fn fsync(&mut self, tag: Tag) -> Result<(), Full<()>> {
         self.memory.fsync(tag)
     }
+
+    fn grow_grid(&mut self, tag: Tag, size: u64) -> Result<(), Full<()>> {
+        self.memory.grow_grid(tag, size)
+    }
 }
 
 impl Network for Node {

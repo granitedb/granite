@@ -264,6 +264,10 @@ impl Storage for Counted {
     fn fsync(&mut self, tag: Tag) -> Result<(), Full<()>> {
         self.disk.fsync(tag)
     }
+
+    fn grow_grid(&mut self, tag: Tag, size: u64) -> Result<(), Full<()>> {
+        self.disk.grow_grid(tag, size)
+    }
 }
 
 /// Gate: one block read is exactly one device read, and the block comes

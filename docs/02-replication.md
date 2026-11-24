@@ -76,7 +76,16 @@ A replica drops, and counts by reason, a message whose header or body does not c
 4. On Qr prepare_oks (including its own durable write), the primary marks the op committed, executes it in order, replies to the client, and advances commit_max, which backups learn from the next prepare or commit heartbeat.
 5. Backups execute ops in order up to commit_max once they hold the prepare.
 
-Pipeline: up to 8 prepares in flight. Requests beyond that queue at the primary.
+Pipeline: up to 8 prepares in flight. Requests beyond that queue at the primary, in a bounded queue; a request that finds it full is refused with `busy`. Until client sessions (section 7) size the queue by the clients of a group and carry `busy` back to the client, the queue holds one pipeline's worth, and a refused request is only counted.
+
+Details of the steps above, as `granite_vsr::replica` implements them:
+- Op 0 is the root of the hash chain: the parent of op 1 is the checksum of the cluster id, the same on every replica.
+- A prepare_ok names the prepare by (view, op): in one view only its primary prepares, and it assigns each op once.
+- A backup sends prepare_ok for each op the WAL reports durable, and again when the primary resends a prepare it already holds durably. The primary counts its own durable write the same way, so it commits an op only once a replication quorum, itself included, holds it, and it commits in op order.
+- On its heartbeat the primary sends commit_max to every backup, and sends each uncommitted prepare again to each backup that has not acknowledged it. A lost or refused prepare is therefore resent while it is uncommitted; once it is committed, the backup that lacks it needs repair (section 5).
+- A backup learns commit_max from every prepare and commit of the primary of its view, gaps included, and executes every committed op it holds.
+- A prepare is held in memory from the time it is prepared until it is both executed and handed to the WAL. Its op is at most 8 past the commit_max it carries, so a replica holds at most 8 prepares. A backup with no room drops the prepare, and the primary resends it.
+- Until clock synchronisation (section 6), the timestamp is the primary's wall clock, raised to one past the previous prepare's timestamp when it is not larger.
 
 **Request coalescing (revised).** With thousands of clients each sending small batches, one prepare per request would cap throughput at prepares per second. So a prepare body is a sequence of request frames, each `(client, request number, operation, events)`. The primary fills the next prepare with every queued request that fits, from any client and any operation, in arrival order. The state machine executes frames in order and updates each client's session entry. Replies are split back per client. Batching in the client library still matters, but throughput no longer depends on it.
 

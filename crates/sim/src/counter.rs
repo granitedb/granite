@@ -40,7 +40,7 @@ use granite_io::{Completion, Connection, Io, Network, Peer, Random, Storage, Tag
 
 use crate::network::{self, Fabric, Latency, Nic};
 use crate::node::{self, Site, Visits};
-use crate::runner::{Event as LogEvent, Failure, Log, Scenario};
+use crate::runner::{Event as LogEvent, Failure, Log, POOL, Scenario};
 use crate::storage::{self, Disk, Group};
 use crate::{Node, Scheduler};
 
@@ -762,6 +762,7 @@ fn check(seed: u64, config: &Config, log: &mut Log, pool: &MessagePool) -> Resul
 /// The counter under its swarm configuration.
 pub const SCENARIO: Scenario = Scenario {
     name: "counter",
+    pool: POOL,
     swarm: |seed| format!("{:?}", swarm(seed)),
     run: |seed, log, pool| check(seed, &swarm(seed), log, pool),
 };
@@ -770,6 +771,7 @@ pub const SCENARIO: Scenario = Scenario {
 /// durable. Fails on some seeds; the runner's own failing scenario.
 pub const LOST_WRITE: Scenario = Scenario {
     name: "counter-lost-write",
+    pool: POOL,
     swarm: |seed| format!("{:?}", lost_write(seed)),
     run: |seed, log, pool| check(seed, &lost_write(seed), log, pool),
 };

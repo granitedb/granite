@@ -51,7 +51,7 @@ fn main() -> ExitCode {
     let scenario = args.scenario;
     if let (true, Seeds::One(seed)) = (args.trace, &args.seeds) {
         let mut log = Log::printing();
-        let pool = MessagePool::new(runner::POOL);
+        let pool = MessagePool::new(scenario.pool);
         return match runner::run(scenario, *seed, &mut log, &pool) {
             Ok(()) => {
                 println!("seed {seed} of scenario {} passed", scenario.name);
@@ -76,7 +76,7 @@ fn main() -> ExitCode {
     let deadline = deadline(&args.seeds);
     let work = || {
         let mut log = Log::new(LAST);
-        let pool = MessagePool::new(runner::POOL);
+        let pool = MessagePool::new(scenario.pool);
         loop {
             let i = next.fetch_add(1, Ordering::Relaxed);
             let Some(seed) = seed_at(&args.seeds, i, deadline) else {

@@ -446,7 +446,7 @@ impl Storage for Memory {
 /// A zone of `size` bytes holding `zone` and zeros after it. Zero chunks are
 /// not copied, so memory nobody wrote stays untouched: a grid grows by a
 /// whole gibibyte at a time, mostly never written in a test.
-pub fn grown(zone: &[u8], size: u64) -> Vec<u8> {
+fn grown(zone: &[u8], size: u64) -> Vec<u8> {
     let mut grown = vec![0; usize::try_from(size).expect("zone fits")];
     for (to, from) in grown.chunks_mut(SECTOR_SIZE).zip(zone.chunks(SECTOR_SIZE)) {
         if from.iter().any(|&b| b != 0) {

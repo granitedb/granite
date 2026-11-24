@@ -8,8 +8,9 @@
 //! its events to a [`Log`] and returns the checker that failed. A new
 //! scenario is one more entry in [`SCENARIOS`].
 //!
-//! Each worker thread hands every seed it runs the same message pool, of
-//! [`POOL`] buffers: allocating one per seed costs more than the seed, and
+//! Each worker thread hands every seed it runs the same message pool, of the
+//! scenario's [`Scenario::pool`] buffers: allocating one per seed costs more
+//! than the seed, and
 //! with many threads its unmapping stalls them all. A seed must return every
 //! buffer, and a scenario must read only bytes it wrote in that seed, so
 //! that a seed run alone, from a fresh pool, does the same.
@@ -22,7 +23,7 @@ use granite_io::message_pool::MessagePool;
 use crate::node::Op;
 use crate::{Scheduler, counter, network, storage};
 
-/// Buffers of the message pool a scenario runs with.
+/// Buffers of the message pool a scenario runs with, unless it needs more.
 pub const POOL: u32 = 48;
 
 /// Events a run may log at one virtual time before it counts as hung.
@@ -48,6 +49,10 @@ pub struct Scenario {
     /// Runs the seed, reporting its events to the log, with buffers from
     /// the pool.
     pub run: fn(u64, &mut Log, &MessagePool) -> Result<(), Failure>,
+    /// Buffers of the pool the seeds run with. The whole pool is resident,
+    /// once per worker thread, so a scenario takes [`POOL`] unless it needs
+    /// more.
+    pub pool: u32,
 }
 
 /// Every scenario the runner knows; the first is the default.
@@ -256,6 +261,7 @@ pub fn run(
 /// runner on each kind of failure.
 const FIXTURE_PANIC: Scenario = Scenario {
     name: "fixture-panic",
+    pool: POOL,
     swarm: |_| String::from("none"),
     run: |seed, log, _| {
         log.push(0, Event::Note("seed", seed));
@@ -268,6 +274,7 @@ const FIXTURE_PANIC: Scenario = Scenario {
 
 const FIXTURE_ASSERTION: Scenario = Scenario {
     name: "fixture-assertion",
+    pool: POOL,
     swarm: |_| String::from("none"),
     run: |seed, log, _| {
         log.push(0, Event::Note("seed", seed));
@@ -278,6 +285,7 @@ const FIXTURE_ASSERTION: Scenario = Scenario {
 
 const FIXTURE_HANG: Scenario = Scenario {
     name: "fixture-hang",
+    pool: POOL,
     swarm: |_| String::from("none"),
     run: |seed, log, _| {
         let mut sim = Scheduler::new(seed, 1);

@@ -118,6 +118,10 @@ impl Storage for Counted<'_> {
     fn fsync(&mut self, _: Tag) -> Result<(), Full<()>> {
         panic!("recovery only reads")
     }
+
+    fn grow_grid(&mut self, _: Tag, _: u64) -> Result<(), Full<()>> {
+        panic!("recovery only reads")
+    }
 }
 
 /// One replica's disk, and the log on it through crashes and recoveries.

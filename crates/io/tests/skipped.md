@@ -51,6 +51,7 @@ Not on Linux: the portable backend's storage and network conformance suites and 
 - `a_peer_that_stops_reading_fills_the_queue`
 - `a_reset_by_the_peer_is_reported_and_returns_the_buffers`
 - `a_size_above_the_limit_closes_the_connection`
+- `a_grown_grid_is_allocated`
 
 ## `tests/record_cost.rs`
 

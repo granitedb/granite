@@ -9,7 +9,7 @@
 //!
 //! Which calls complete synchronously:
 //! - **Never:** [`Storage::read`], [`Storage::write`], [`Storage::fsync`],
-//!   [`Network::connect`], [`Network::accept`], [`Network::send`],
+//!   [`Storage::grow_grid`], [`Network::connect`], [`Network::accept`], [`Network::send`],
 //!   [`Network::recv`]. Their completion is never delivered inside the
 //!   submitting call, even when a backend could finish at once, so no handler
 //!   runs while its caller is half way through an update, and the simulator
@@ -136,6 +136,11 @@ pub enum Completion {
         tag: Tag,
         result: Result<(), StorageError>,
     },
+    /// The grid zone has the size asked for, allocated and durable.
+    Grown {
+        tag: Tag,
+        result: Result<(), StorageError>,
+    },
     Connected {
         tag: Tag,
         result: Result<Connection, NetworkError>,
@@ -166,6 +171,7 @@ impl Completion {
             Completion::Read { tag, .. }
             | Completion::Write { tag, .. }
             | Completion::Fsync { tag, .. }
+            | Completion::Grown { tag, .. }
             | Completion::Connected { tag, .. }
             | Completion::Accepted { tag, .. }
             | Completion::Sent { tag, .. }
@@ -203,6 +209,14 @@ pub trait Storage {
     ) -> Result<(), Full<Message>>;
     /// Makes every completed write durable.
     fn fsync(&mut self, tag: Tag) -> Result<(), Full<()>>;
+    /// Makes the grid zone, the last in the file, at least `size` bytes, a
+    /// multiple of the sector size; a smaller `size` changes nothing, so a
+    /// growth replayed after a crash is harmless. The space is allocated, not
+    /// a hole, so a later write cannot fail for lack of it. Once it
+    /// completes, with [`Completion::Grown`], the new bytes read as zeros,
+    /// the new size is durable and [`Storage::size`] reports it; until then
+    /// nothing may be read or written past the old size.
+    fn grow_grid(&mut self, tag: Tag, size: u64) -> Result<(), Full<()>>;
 }
 
 /// Connections that carry whole messages. Framing (the header's size field)

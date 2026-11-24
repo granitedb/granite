@@ -422,6 +422,38 @@ impl Storage for Memory {
         );
         Ok(())
     }
+
+    fn grow_grid(&mut self, tag: Tag, size: u64) -> Result<(), Full<()>> {
+        assert!(size.is_multiple_of(SECTOR_SIZE as u64));
+        if !self.admit() {
+            return Err(Full(()));
+        }
+        let grid = &mut self.zones[Zone::Grid as usize];
+        if size > grid.len() as u64 {
+            *grid = grown(grid, size);
+        }
+        self.hub.state.borrow_mut().push(
+            self.peer,
+            Completion::Grown {
+                tag,
+                result: Ok(()),
+            },
+        );
+        Ok(())
+    }
+}
+
+/// A zone of `size` bytes holding `zone` and zeros after it. Zero chunks are
+/// not copied, so memory nobody wrote stays untouched: a grid grows by a
+/// whole gibibyte at a time, mostly never written in a test.
+pub fn grown(zone: &[u8], size: u64) -> Vec<u8> {
+    let mut grown = vec![0; usize::try_from(size).expect("zone fits")];
+    for (to, from) in grown.chunks_mut(SECTOR_SIZE).zip(zone.chunks(SECTOR_SIZE)) {
+        if from.iter().any(|&b| b != 0) {
+            to.copy_from_slice(from);
+        }
+    }
+    grown
 }
 
 impl Network for Memory {

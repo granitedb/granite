@@ -162,6 +162,11 @@ enum Kind {
     Read(Message),
     Write(Message),
     Fsync,
+    /// Allocates the grid up to the size in `position`, then, once
+    /// `allocated`, makes it durable with an fsync.
+    Grow {
+        allocated: bool,
+    },
     /// The socket being connected; `None` when the connect failed before it
     /// had one.
     Connect(Option<u32>),
@@ -384,7 +389,10 @@ impl Uring {
         let op = self.slots[index as usize]
             .as_mut()
             .expect("a completion belongs to an operation in flight");
-        if !matches!(op.kind, Kind::Read(_) | Kind::Write(_) | Kind::Fsync) {
+        if !matches!(
+            op.kind,
+            Kind::Read(_) | Kind::Write(_) | Kind::Fsync | Kind::Grow { .. }
+        ) {
             return self.complete_network(index, result);
         }
         let result = match result {
@@ -393,7 +401,12 @@ impl Uring {
                 return None;
             }
             e if e < 0 => Err(StorageError),
-            _ if matches!(op.kind, Kind::Fsync) => Ok(()),
+            _ if matches!(op.kind, Kind::Grow { allocated: false }) => {
+                op.kind = Kind::Grow { allocated: true };
+                self.push(index);
+                return None;
+            }
+            _ if matches!(op.kind, Kind::Fsync | Kind::Grow { .. }) => Ok(()),
             // No progress: past the end of the file, which open sized.
             0 => Err(StorageError),
             n => {
@@ -424,6 +437,16 @@ impl Uring {
                 tag: op.tag,
                 result,
             },
+            Kind::Grow { .. } => {
+                let grid = &mut self.sizes[Zone::Grid as usize];
+                if result.is_ok() {
+                    *grid = op.position.max(*grid);
+                }
+                Completion::Grown {
+                    tag: op.tag,
+                    result,
+                }
+            }
             _ => unreachable!("a storage operation"),
         })
     }
@@ -474,7 +497,9 @@ impl Uring {
             }
             Kind::Send(socket, _) => (socket, false),
             Kind::Recv(socket, _) => (socket, true),
-            Kind::Read(_) | Kind::Write(_) | Kind::Fsync => unreachable!("a network operation"),
+            Kind::Read(_) | Kind::Write(_) | Kind::Fsync | Kind::Grow { .. } => {
+                unreachable!("a network operation")
+            }
         };
         let progress = match result {
             _ if retry => Some(false),
@@ -548,7 +573,9 @@ impl Uring {
                 buffer,
                 result: result.map(|len| u32::try_from(len).expect("a message length")),
             },
-            Kind::Read(_) | Kind::Write(_) | Kind::Fsync => unreachable!("a network operation"),
+            Kind::Read(_) | Kind::Write(_) | Kind::Fsync | Kind::Grow { .. } => {
+                unreachable!("a network operation")
+            }
         }
     }
 
@@ -681,7 +708,7 @@ impl Uring {
         let len = op.len - op.done;
         #[cfg(test)]
         let len = match self.fault {
-            Some(Fault::Short) if !matches!(op.kind, Kind::Fsync) => {
+            Some(Fault::Short) if matches!(op.kind, Kind::Read(_) | Kind::Write(_)) => {
                 self.fault = None;
                 len.min(SECTOR_SIZE as u32)
             }
@@ -709,7 +736,16 @@ impl Uring {
             Kind::Write(_) => opcode::WriteFixed::new(FILE, address, len, POOL)
                 .offset(position)
                 .build(),
-            Kind::Fsync => opcode::Fsync::new(FILE).build(),
+            Kind::Fsync | Kind::Grow { allocated: true } => opcode::Fsync::new(FILE).build(),
+            Kind::Grow { allocated: false } => {
+                // Mode 0 allocates the range and extends the file to its end;
+                // a range already allocated, after a crash, stays as it is.
+                let grid = Zone::Grid as usize;
+                let end = self.starts[grid] + op.position.max(self.sizes[grid]);
+                opcode::Fallocate::new(FILE, end - self.starts[grid])
+                    .offset(self.starts[grid])
+                    .build()
+            }
             Kind::Connect(socket) => {
                 let socket = socket.expect("a connect in the ring has a socket");
                 let (to, to_len) = match &self.sockets[socket as usize].address {
@@ -869,6 +905,22 @@ impl Storage for Uring {
             tag,
             kind: Kind::Fsync,
             position: 0,
+            len: 0,
+            done: 0,
+            address: std::ptr::null_mut(),
+        });
+        Ok(())
+    }
+
+    fn grow_grid(&mut self, tag: Tag, size: u64) -> Result<(), Full<()>> {
+        assert!(size.is_multiple_of(SECTOR_SIZE as u64));
+        if self.free.is_empty() {
+            return Err(Full(()));
+        }
+        self.start(Op {
+            tag,
+            kind: Kind::Grow { allocated: false },
+            position: size,
             len: 0,
             done: 0,
             address: std::ptr::null_mut(),

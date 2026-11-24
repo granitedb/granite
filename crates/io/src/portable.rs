@@ -118,6 +118,8 @@ enum Kind {
     Read(Message),
     Write(Message),
     Fsync,
+    /// The grid's new size is the operation's position.
+    Grow,
     Connect,
     Accept,
     Send(Message),
@@ -259,6 +261,18 @@ impl Portable {
                 tag,
                 result: full_fsync(&self.file).map_err(|_| StorageError),
             },
+            Kind::Grow => {
+                let grid = Zone::Grid as usize;
+                let size = position.max(self.sizes[grid]);
+                let result = grow(&self.file, self.starts[grid] + size);
+                if result.is_ok() {
+                    self.sizes[grid] = size;
+                }
+                Completion::Grown {
+                    tag,
+                    result: result.map_err(|_| StorageError),
+                }
+            }
             _ => unreachable!("a storage operation"),
         }
     }
@@ -369,7 +383,9 @@ impl Portable {
                 buffer,
                 result: result.map(|len| u32::try_from(len).expect("a message length")),
             },
-            Kind::Read(_) | Kind::Write(_) | Kind::Fsync => unreachable!("a network operation"),
+            Kind::Read(_) | Kind::Write(_) | Kind::Fsync | Kind::Grow => {
+                unreachable!("a network operation")
+            }
         }
     }
 
@@ -554,6 +570,16 @@ impl Storage for Portable {
         self.storage.push_back(index);
         Ok(())
     }
+
+    fn grow_grid(&mut self, tag: Tag, size: u64) -> Result<(), Full<()>> {
+        assert!(size.is_multiple_of(SECTOR_SIZE as u64));
+        if self.free.is_empty() {
+            return Err(Full(()));
+        }
+        let index = self.insert(tag, Kind::Grow, size, 0);
+        self.storage.push_back(index);
+        Ok(())
+    }
 }
 
 impl Network for Portable {
@@ -627,6 +653,33 @@ impl Network for Portable {
 /// `EINTR` or `EAGAIN`: nothing moved, try again on a later poll.
 fn is_transient(error: &io::Error) -> bool {
     matches!(error.kind(), ErrorKind::WouldBlock | ErrorKind::Interrupted)
+}
+
+/// Makes `file` at least `end` bytes, the new ones allocated, and the size
+/// durable. A crash after an earlier growth can leave the file longer.
+fn grow(file: &File, end: u64) -> io::Result<()> {
+    let len = file.metadata()?.len();
+    // shortcut: F_PREALLOCATE counts from the physical end of the file, so a
+    // file with holes before `len` (open sizes a new file with set_len) gets
+    // fewer bytes allocated than asked; fine for this development backend,
+    // allocate from the allocated size if it ever serves production.
+    if len < end {
+        let mut store = libc::fstore_t {
+            fst_flags: libc::F_ALLOCATEALL,
+            fst_posmode: libc::F_PEOFPOSMODE,
+            fst_offset: 0,
+            fst_length: i64::try_from(end - len).expect("fits"),
+            fst_bytesalloc: 0,
+        };
+        // SAFETY: fcntl(F_PREALLOCATE) reads and writes the fstore_t it is
+        // given, which lives on this stack frame for the whole call; the
+        // descriptor is open while `file` lives.
+        if unsafe { libc::fcntl(file.as_raw_fd(), libc::F_PREALLOCATE, &raw mut store) } == -1 {
+            return Err(io::Error::last_os_error());
+        }
+        file.set_len(end)?;
+    }
+    full_fsync(file)
 }
 
 /// Flushes `file` to the drive and asks the drive to flush its cache. Plain

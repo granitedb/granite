@@ -398,6 +398,10 @@ impl Storage for Traced {
         );
         Ok(())
     }
+
+    fn grow_grid(&mut self, _: Tag, _: u64) -> Result<(), Full<()>> {
+        unreachable!("the WAL never grows the grid")
+    }
 }
 
 impl Backend for Traced {
